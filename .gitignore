@@ -45,3 +45,5 @@ bids-examples
 cpac_runs/
 
 .DS_Store
+
+CPAC/bcb_mdmr/output/

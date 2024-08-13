@@ -1,5 +1,6 @@
 import os
-
+import time
+from pathlib import Path
 import nibabel as nb
 import numpy as np
 import pandas as pd
@@ -13,7 +14,7 @@ from CPAC.utils import correlation
 from CPAC.pipeline.cpac_ga_model_generator import (create_merge_mask,
                                                    create_merged_copefile)
 
-
+from tqdm import tqdm
 def joint_mask(subjects, mask_file=None):
     """
     Creates a joint mask (intersection) common to all the subjects in a provided list
@@ -47,27 +48,58 @@ def calc_mdmrs(D, regressor, cols, permutations):
     return F_set, p_set
 
 
-def calc_subdists(subjects_data, voxel_range):
-    subjects, voxels, _ = subjects_data.shape
-    D = np.zeros((len(voxel_range), subjects, subjects))
-    for i, v in enumerate(voxel_range):
-        profiles = np.zeros((subjects, voxels))
-        for si in range(subjects):
-            profiles[si] = correlation(subjects_data[si, v], subjects_data[si])
-        profiles = np.clip(np.nan_to_num(profiles), -0.9999, 0.9999)
-        profiles = np.arctanh(np.delete(profiles, v, 1))
-        D[i] = correlation(profiles, profiles)
+def calc_subdists(subjects_data, voxel_range, subject_group,target_subject_index):
+    distance_file_name = f"../../output/distance/{subject_group}_distance.npy"
 
-    D = np.sqrt(2.0 * (1.0 - D))
-    return D
+    if os.path.exists(distance_file_name):
+        # 파일이 존재하는 경우: 파일을 로드
+        print(f"Loading distance data from {distance_file_name}")
+        distances = np.load(distance_file_name)
+        print(distances.shape)
+        if target_subject_index:
+            print("slicing")
+            distances = distances [:,target_subject_index,:][:,:,target_subject_index]
+            # 이후 처리를 여기에 추가할 수 있습니다.
+            # 예를 들어, distances를 이용한 분석이나 결과 반환
+            print(distances.shape)
+            return distances
+        else:
+            print("NOT slicing")
+            print(distances.shape)
+            return distances
+    else:
+        print(f"Calculating distance for the first time.")
+        subjects, voxels, _ = subjects_data.shape
+        D = np.zeros((len(voxel_range), subjects, subjects))
+        for i, v in tqdm(enumerate(voxel_range), total=len(voxel_range)):
+            profiles = np.zeros((subjects, voxels))
+            for si in range(subjects):
+                profiles[si] = correlation(subjects_data[si, v], subjects_data[si])
+            profiles = np.clip(np.nan_to_num(profiles), -0.9999, 0.9999)
+            profiles = np.arctanh(np.delete(profiles, v, 1))
+            D[i] = correlation(profiles, profiles)
+
+        D = np.sqrt(2.0 * (1.0 - D))
+        np.save(distance_file_name, D)
+        return D
 
 
-def calc_cwas(subjects_data, regressor, regressor_selected_cols, permutations, voxel_range):
-    D = calc_subdists(subjects_data, voxel_range)
+def calc_cwas(subjects_data, regressor, regressor_selected_cols, permutations, voxel_range, subject_group,target_subject_index):
+    start_time = time.time()
+    D = calc_subdists(subjects_data, voxel_range, subject_group,target_subject_index)
+    end_time = time.time()
+
+    elapsed_time = end_time - start_time
+    print(f"calc_subdists time: {elapsed_time:.2f} seconds")
+
+    start_time = time.time()
     F_set, p_set = calc_mdmrs(
         D, regressor, regressor_selected_cols, permutations)
-    return F_set, p_set
+    end_time = time.time()
+    elapsed_time = end_time - start_time
+    print(f"calc_mdmrs time: {elapsed_time:.2f} seconds")
 
+    return F_set, p_set
 def pval_to_zval(p_set, permu):
     inv_pval = 1 - p_set
     zvals = t.ppf(inv_pval, (len(p_set) - 1))
@@ -76,7 +108,7 @@ def pval_to_zval(p_set, permu):
     return zvals
 
 def nifti_cwas(subjects, mask_file, regressor_file, participant_column,
-               columns_string, permutations, voxel_range):
+               columns_string, permutations, voxel_range, subject_group, target_subject_index):
     """
     Performs CWAS for a group of subjects
     
@@ -129,19 +161,43 @@ def nifti_cwas(subjects, mask_file, regressor_file, participant_column,
     subject_ids = list(subjects.keys())
     subject_files = list(subjects.values())
 
+    # Validate and filter subjects based on target_subject_index
+    if target_subject_index:
+        if any(idx >= len(subject_ids) for idx in target_subject_index):
+            print(len(subject_ids))
+            print(target_subject_index)
+            raise ValueError('Index out of range in target_subject_index.')
+
+        filtered_subject_ids = [subject_ids[idx] for idx in target_subject_index]
+        filtered_subject_files = [subject_files[idx] for idx in target_subject_index]
+
+        # Create a filtered subjects dictionary
+        filtered_subjects = dict(zip(filtered_subject_ids, filtered_subject_files))
+        subject_ids = list(filtered_subjects.keys())
+        subject_files = list(filtered_subjects.values())
+        
+        # Filter regressor data based on the filtered_subject_ids
+        filtered_regressor_data = regressor_data[regressor_data[participant_column].isin(filtered_subject_ids)]
+    else:
+        print("FALSEEEE!!!")
+        filtered_subjects = subjects
+        subject_ids = list(filtered_subjects.keys())
+        subject_files = list(filtered_subjects.values())
+        filtered_regressor_data = regressor_data
+
     # check for inconsistency with leading zeroes
     # (sometimes, the sub_ids from individual will be something like
     #  '0002601' and the phenotype will have '2601')
-    for index, row in regressor_data.iterrows():
+    for index, row in filtered_regressor_data.iterrows():
         pheno_sub_id = str(row[participant_column])
         for sub_id in subject_ids:
             if str(sub_id).lstrip('0') == str(pheno_sub_id):
-                regressor_data.at[index, participant_column] = str(sub_id)
+                filtered_regressor_data.at[index, participant_column] = str(sub_id)
     
-    regressor_data.index = regressor_data[participant_column]
+    filtered_regressor_data.index = filtered_regressor_data[participant_column]
 
     # Keep only data from specific subjects
-    ordered_regressor_data = regressor_data.loc[subject_ids]
+    ordered_regressor_data = filtered_regressor_data.loc[subject_ids]
 
     columns = columns_string.split(',')
     regressor_selected_cols = [
@@ -171,7 +227,7 @@ def nifti_cwas(subjects, mask_file, regressor_file, participant_column,
     ])
 
     F_set, p_set = calc_cwas(subjects_data, regressor, regressor_selected_cols,
-                             permutations, voxel_range)
+                             permutations, voxel_range, subject_group,target_subject_index)
     cwd = os.getcwd()
     F_file = os.path.join(cwd, 'pseudo_F.npy')
     p_file = os.path.join(cwd, 'significance_p.npy')
@@ -199,7 +255,7 @@ def volumize(mask_image, data):
     )
 
 
-def merge_cwas_batches(cwas_batches, mask_file, z_score, permutations):
+def merge_cwas_batches(cwas_batches, mask_file, z_score, permutations, subject_group, variable_of_interest):
     _, _, voxel_range = zip(*cwas_batches)
     voxels = np.array(np.concatenate(voxel_range))
 
@@ -219,11 +275,13 @@ def merge_cwas_batches(cwas_batches, mask_file, z_score, permutations):
     log_p_vol = volumize(mask_image, log_p_set)
     one_p_vol = volumize(mask_image, one_p_set)
 
-    cwd = os.getcwd()
-    F_file = os.path.join(cwd, 'pseudo_F_volume.nii.gz')
-    p_file = os.path.join(cwd, 'p_significance_volume.nii.gz')
-    log_p_file = os.path.join(cwd, 'neglog_p_significance_volume.nii.gz')
-    one_p_file = os.path.join(cwd, 'one_minus_p_values.nii.gz')
+    base_dir = Path(f"/home/changbae/fmri_project/C-PAC/CPAC/bcb_mdmr/output/{subject_group}")
+    F_file = base_dir / f"{variable_of_interest}_pseudo_F_volume.nii.gz"
+    p_file = base_dir / f"{variable_of_interest}_p_significance_volume.nii.gz"
+    log_p_file = base_dir / f"{variable_of_interest}_neglog_p_significance_volume.nii.gz"
+    one_p_file = base_dir / f"{variable_of_interest}_one_minus_p_values.nii.gz"
+
+    base_dir.mkdir(parents=True, exist_ok=True)
 
     F_vol.to_filename(F_file)
     p_vol.to_filename(p_file)
@@ -232,19 +290,19 @@ def merge_cwas_batches(cwas_batches, mask_file, z_score, permutations):
 
     if 1 in z_score:
         zvals = pval_to_zval(p_set, permutations)
-        z_file = zstat_image(zvals, mask_file)
+        z_file = zstat_image(zvals, mask_file, subject_group, variable_of_interest)
     else:
         z_file = None
 
     return F_file, p_file, log_p_file, one_p_file, z_file
 
-def zstat_image(zvals, mask_file):
+def zstat_image(zvals, mask_file, subject_group, variable_of_interest):
     mask_image = nb.load(mask_file)
 
     z_vol = volumize(mask_image, zvals)
 
-    cwd = os.getcwd()
-    z_file = os.path.join(cwd, 'zstat.nii.gz')
+    base_dir = Path(f"/home/changbae/fmri_project/C-PAC/CPAC/bcb_mdmr/output/{subject_group}")
+    z_file = base_dir / f"{variable_of_interest}_zstat.nii.gz"
  
     z_vol.to_filename(z_file)
     return z_file
