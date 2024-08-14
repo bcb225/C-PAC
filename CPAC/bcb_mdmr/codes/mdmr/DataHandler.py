@@ -11,7 +11,7 @@ class DataHandler:
         subject_dict = {}
         for subject_code in subject_codes:
             subject_code = str(subject_code[0])
-            subject_fmri_dir = f"/mnt/NAS2/data/SAD_gangnam_resting/fMRIPrep/sub-{subject_code}/ses-01/func/sub-{subject_code}_ses-01_task-rest_space-MNI152NLin2009cAsym_desc-preproc_bold.nii.gz"
+            subject_fmri_dir = f"/mnt/NAS2-2/data/SAD_gangnam_resting_2/fMRIPrep_total/sub-{subject_code}/ses-01/func/sub-{subject_code}_ses-01_task-rest_space-MNI152NLin2009cAsym_desc-smoothed8mm_resampled4mm_bold.nii.gz"
             subject_dict[subject_code] = subject_fmri_dir
         return subject_dict
     def get_mask_file(self,subject_group):

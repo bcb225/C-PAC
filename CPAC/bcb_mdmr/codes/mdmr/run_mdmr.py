@@ -18,8 +18,8 @@ from CPAC.cwas.cwas import *
 import nibabel as nib
 from DataHandler import DataHandler
 
-subject_group = "gangnam_1"
-variable_of_interest = "LSAS_performance"
+subject_group = "gangnam_total"
+variable_of_interest = "LSAS"
 data_handler = DataHandler()
 subjects = data_handler.subject_dict_maker(subject_group)
 target_subject_index = False

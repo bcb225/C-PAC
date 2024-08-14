@@ -18,7 +18,7 @@ final_mask="../../template/${subject_group}_final_group_mask.nii.gz"
 group_prop_mask="../../template/${subject_group}_group_prop_subjs.nii.gz"
 
 # 기본 fMRI 파일 경로 패턴
-base_path="/mnt/NAS2/data/SAD_gangnam_resting/fMRIPrep"
+base_path="/mnt/NAS2-2/data/SAD_gangnam_resting_2/fMRIPrep_total"
 mask_suffix="ses-01/func"
 
 # Create individual subject brain masks
@@ -26,7 +26,7 @@ funcpaths=()
 echo "CSV 파일 내용 확인:"
 while IFS=, read -r subject_code; do
     #echo "읽은 subject code: $subject_code"
-    func_path="${base_path}/sub-${subject_code}/${mask_suffix}/sub-${subject_code}_ses-01_task-rest_space-MNI152NLin2009cAsym_desc-preproc_bold.nii.gz"
+    func_path="${base_path}/sub-${subject_code}/${mask_suffix}/sub-${subject_code}_ses-01_task-rest_space-MNI152NLin2009cAsym_desc-smoothed8mm_resampled4mm_bold.nii.gz"
     #echo "확인 중: ${func_path}"
     if [ -f "${func_path}" ]; then
         funcpaths+=("${func_path}")
@@ -76,6 +76,10 @@ echo "그룹 마스크와 임계값이 적용된 GM 마스크 결합 중..."
 3dcalc -a ${maskfile} -b ${threshold_gm} -expr 'a*b' -prefix ${final_mask}
 
 echo "최종 그룹 마스크가 ${final_mask}로 저장되었습니다."
+
+# 최종 마스크 파일의 활성화된 복셀 수 계산 및 출력
+voxel_count=$(fslstats ${final_mask} -V | awk '{print $1}')
+echo "최종 그룹 마스크의 활성화된 복셀 수: ${voxel_count}"
 
 # 임시 마스크 파일 삭제
 for (( i = 0; i < $n; i++ )); do
