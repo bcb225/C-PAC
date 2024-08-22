@@ -15,8 +15,8 @@ class DataHandler:
             subject_dict[subject_code] = subject_fmri_dir
         return subject_dict
     def get_mask_file(self,subject_group):
-        #진짜 mask
-        return f"/home/changbae/fmri_project/C-PAC/CPAC/bcb_mdmr/template/{subject_group}_final_group_mask.nii.gz"
+        #진짜 mask, 모든 피험자 같은 마스크 파일 사용
+        return f"/home/changbae/fmri_project/C-PAC/CPAC/bcb_mdmr/template/gangnam_total_final_group_mask.nii.gz"
         
         #tiny exmaple 연습용
         #return f"/home/changbae/fmri_project/C-PAC/CPAC/bcb_mdmr/template/{subject_group}_small_final_group_mask.nii.gz"
@@ -25,7 +25,7 @@ class DataHandler:
     def get_voxel_range(self, subject_group):
         #mask_file = f"/home/changbae/fmri_project/C-PAC/CPAC/bcb_mdmr/template/{subject_group}_small_final_group_mask.nii.gz"
         #진짜 mask
-        mask_file = f"/home/changbae/fmri_project/C-PAC/CPAC/bcb_mdmr/template/{subject_group}_final_group_mask.nii.gz"
+        mask_file = f"/home/changbae/fmri_project/C-PAC/CPAC/bcb_mdmr/template/gangnam_total_final_group_mask.nii.gz"
         # NIfTI 파일 로드
         img = nib.load(mask_file)
         

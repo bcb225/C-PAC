@@ -1,4 +1,5 @@
 import numpy as np
+from tqdm import tqdm
 
 def check_rank(X):
     k    = X.shape[1]
@@ -100,10 +101,23 @@ def mdmr(D, X, columns, permutations):
 
     F_perms = ftest_fast(H2perms, IHperms, Gs, df_among, df_resid)
 
-    p_vals = (F_perms[1:, :] >= F_perms[0, :]) \
+    """p_vals = (F_perms[1:, :] >= F_perms[0, :]) \
                 .sum(axis=0) \
                 .astype('float')
-    p_vals /= permutations
+    p_vals /= permutations"""
 
-    return F_perms[0, :], p_vals
+    # Initialize an array to store p-values for each permutation
+    all_p_vals = np.zeros_like(F_perms)
 
+    # Loop through each F_perms[i, :] as the reference, with tqdm for progress display
+    for i in tqdm(range(F_perms.shape[0]), desc="Calculating p-values"):
+        # Calculate p-values for F_perms[i, :] against all other permutations
+        p_vals = (F_perms[np.arange(F_perms.shape[0]) != i, :] >= F_perms[i, :]) \
+                    .sum(axis=0) \
+                    .astype('float')
+        p_vals /= F_perms.shape[0]  # Adjust the division since we are excluding the current permutation
+
+        # Store the computed p-values for this permutation
+        all_p_vals[i, :] = p_vals
+
+    return F_perms[0, :], all_p_vals

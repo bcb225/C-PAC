@@ -15,7 +15,7 @@ for subject_dir in ${base_dir}/sub-*/; do
     input_file="${func_dir}${subject_code}_ses-01_task-rest_space-MNI152NLin2009cAsym_desc-preproc_bold.nii.gz"
     
     # 출력 파일 이름 설정 (smoothing 적용된 파일)
-    output_file="${func_dir}${subject_code}_ses-01_task-rest_space-MNI152NLin2009cAsym_desc-smoothed8mm_bold.nii.gz"
+    output_file="${func_dir}${subject_code}_ses-01_task-rest_space-MNI152NLin2009cAsym_desc-smoothed6mm_bold.nii.gz"
     
     # 출력 파일이 이미 존재하는 경우 스킵
     if [ -f "${output_file}" ]; then
@@ -24,7 +24,7 @@ for subject_dir in ${base_dir}/sub-*/; do
     fi
     
     # 8mm smoothing 적용
-    3dBlurToFWHM -FWHM 8 -input ${input_file} -prefix ${output_file}
+    3dBlurToFWHM -FWHM 6 -input ${input_file} -prefix ${output_file}
     
     # 결과 출력
     echo "Smoothing applied for ${subject_code}, saved as ${output_file}"

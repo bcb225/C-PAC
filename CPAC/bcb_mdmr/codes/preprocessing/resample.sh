@@ -21,10 +21,10 @@ for subject_dir in ${base_dir}/sub-*/; do
     func_dir="${subject_dir}ses-01/func/"
     
     # 입력 파일 이름 설정 (smoothing이 적용된 파일)
-    input_file="${func_dir}${subject_code}_ses-01_task-rest_space-MNI152NLin2009cAsym_desc-smoothed8mm_bold.nii.gz"
+    input_file="${func_dir}${subject_code}_ses-01_task-rest_space-MNI152NLin2009cAsym_desc-smoothed6mm_bold.nii.gz"
     
     # 출력 파일 이름 설정 (resampling 적용된 파일)
-    output_file="${func_dir}${subject_code}_ses-01_task-rest_space-MNI152NLin2009cAsym_desc-smoothed8mm_resampled4mm_bold.nii.gz"
+    output_file="${func_dir}${subject_code}_ses-01_task-rest_space-MNI152NLin2009cAsym_desc-smoothed6mm_resampled4mm_bold.nii.gz"
     
     # 처리하려는 피험자 수 증가
     total_subjects=$((total_subjects + 1))

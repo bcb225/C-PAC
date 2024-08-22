@@ -54,7 +54,10 @@ def calc_subdists(subjects_data, voxel_range, subject_group,target_subject_index
     if os.path.exists(distance_file_name):
         # 파일이 존재하는 경우: 파일을 로드
         print(f"Loading distance data from {distance_file_name}")
-        distances = np.load(distance_file_name)
+        distances = np.load(distance_file_name, mmap_mode='r')
+        
+        # 필요한 부분만 슬라이싱하여 로드
+        distances = distances[voxel_range, :, :]
         print(distances.shape)
         if target_subject_index:
             print("slicing")
@@ -108,7 +111,7 @@ def pval_to_zval(p_set, permu):
     return zvals
 
 def nifti_cwas(subjects, mask_file, regressor_file, participant_column,
-               columns_string, permutations, voxel_range, subject_group, target_subject_index):
+               columns_string, permutations, variable_of_interest, voxel_range, subject_group, target_subject_index):
     """
     Performs CWAS for a group of subjects
     
@@ -179,7 +182,6 @@ def nifti_cwas(subjects, mask_file, regressor_file, participant_column,
         # Filter regressor data based on the filtered_subject_ids
         filtered_regressor_data = regressor_data[regressor_data[participant_column].isin(filtered_subject_ids)]
     else:
-        print("FALSEEEE!!!")
         filtered_subjects = subjects
         subject_ids = list(filtered_subjects.keys())
         subject_files = list(filtered_subjects.values())
@@ -228,14 +230,20 @@ def nifti_cwas(subjects, mask_file, regressor_file, participant_column,
 
     F_set, p_set = calc_cwas(subjects_data, regressor, regressor_selected_cols,
                              permutations, voxel_range, subject_group,target_subject_index)
-    cwd = os.getcwd()
-    F_file = os.path.join(cwd, 'pseudo_F.npy')
-    p_file = os.path.join(cwd, 'significance_p.npy')
+    
+    
+    raw_dir = Path(f"/home/changbae/fmri_project/C-PAC/CPAC/bcb_mdmr/output/{subject_group}/{variable_of_interest}/temp/raw")
+    raw_dir.mkdir(parents=True, exist_ok=True)
 
+    F_file = raw_dir /f"pseudo_F.npy"
     np.save(F_file, F_set)
-    np.save(p_file, p_set)
-
-    return F_file, p_file, voxel_range
+    for i in range (0,p_set.shape[0]):
+        p_file = raw_dir / f"significance_{i}.npy"
+        np.save(p_file, p_set[i,:])
+    temp_dir = Path(f"/home/changbae/fmri_project/C-PAC/CPAC/bcb_mdmr/output/{subject_group}/{variable_of_interest}/temp")
+    # Ensure the directory exists
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    return temp_dir, voxel_range
 
 
 def create_cwas_batches(mask_file, batches):
@@ -256,38 +264,54 @@ def volumize(mask_image, data):
 
 
 def merge_cwas_batches(cwas_batches, mask_file, z_score, permutations, subject_group, variable_of_interest):
-    _, _, voxel_range = zip(*cwas_batches)
+    _, voxel_range = zip(*cwas_batches)
     voxels = np.array(np.concatenate(voxel_range))
 
     mask_image = nb.load(mask_file)
 
     F_set = np.zeros_like(voxels, dtype=np.float64)
     p_set = np.zeros_like(voxels, dtype=np.float64)
-    for F_file, p_file, voxel_range in cwas_batches:
+    p_set_dict = {}
+    for i in range(0, permutations):
+        p_set_dict[i] = np.zeros_like(voxels, dtype=np.float64)
+    for temp_dir, voxel_range in cwas_batches:
+        temp_dir = Path(temp_dir)
+        F_file = temp_dir / "raw" / "pseudo_F.npy"
         F_set[voxel_range] = np.load(F_file)
-        p_set[voxel_range] = np.load(p_file)
+        
+        for i in range(0,permutations):
+            p_file = temp_dir/ "raw" / f"significance_{i}.npy"
+            p_set_dict[i][voxel_range] = np.load(p_file)
+        
 
     log_p_set = -np.log10(p_set)
     one_p_set = 1 - p_set
 
     F_vol = volumize(mask_image, F_set)
-    p_vol = volumize(mask_image, p_set)
+    p_vol = volumize(mask_image, p_set_dict[0])
     log_p_vol = volumize(mask_image, log_p_set)
     one_p_vol = volumize(mask_image, one_p_set)
 
-    base_dir = Path(f"/home/changbae/fmri_project/C-PAC/CPAC/bcb_mdmr/output/{subject_group}")
-    F_file = base_dir / f"{variable_of_interest}_pseudo_F_volume.nii.gz"
-    p_file = base_dir / f"{variable_of_interest}_p_significance_volume.nii.gz"
-    log_p_file = base_dir / f"{variable_of_interest}_neglog_p_significance_volume.nii.gz"
-    one_p_file = base_dir / f"{variable_of_interest}_one_minus_p_values.nii.gz"
+    base_dir = Path(f"/home/changbae/fmri_project/C-PAC/CPAC/bcb_mdmr/output/{subject_group}/{variable_of_interest}/result/")
+    base_dir.mkdir(parents=True, exist_ok=True)
+    F_file = base_dir / f"pseudo_F_volume.nii.gz"
+    p_file = base_dir / f"p_significance_volume.nii.gz"
+    log_p_file = base_dir / f"neglog_p_significance_volume.nii.gz"
+    one_p_file = base_dir / f"one_minus_p_values.nii.gz"
 
     base_dir.mkdir(parents=True, exist_ok=True)
 
+    volume_dir = Path(f"/home/changbae/fmri_project/C-PAC/CPAC/bcb_mdmr/output/{subject_group}/{variable_of_interest}/temp/volume")
+    volume_dir.mkdir(parents=True, exist_ok=True)
+
+    for i in range(0,permutations):
+        temp_p_vol = volumize(mask_image, p_set_dict[i])
+        temp_p_file = volume_dir / f"p_significance_volume_{i}.nii.gz"
+        temp_p_vol.to_filename(temp_p_file)
     F_vol.to_filename(F_file)
     p_vol.to_filename(p_file)
     log_p_vol.to_filename(log_p_file)
     one_p_vol.to_filename(one_p_file)
-
     if 1 in z_score:
         zvals = pval_to_zval(p_set, permutations)
         z_file = zstat_image(zvals, mask_file, subject_group, variable_of_interest)
@@ -301,8 +325,9 @@ def zstat_image(zvals, mask_file, subject_group, variable_of_interest):
 
     z_vol = volumize(mask_image, zvals)
 
-    base_dir = Path(f"/home/changbae/fmri_project/C-PAC/CPAC/bcb_mdmr/output/{subject_group}")
-    z_file = base_dir / f"{variable_of_interest}_zstat.nii.gz"
+    base_dir = Path(f"/home/changbae/fmri_project/C-PAC/CPAC/bcb_mdmr/output/{subject_group}/{variable_of_interest}/result/")
+    base_dir.mkdir(parents=True, exist_ok=True)
+    z_file = base_dir / "zstat.nii.gz"
  
     z_vol.to_filename(z_file)
     return z_file
