@@ -24,33 +24,36 @@ from DataHandler import DataHandler
 parser = argparse.ArgumentParser(description='Run CWAS analysis.')
 parser.add_argument('--group', type=str, required=True, help='Subject group name')
 parser.add_argument('--variable', type=str, required=True, help='Variable of interest')
+parser.add_argument('--smoothness', type=str, required=True, help='Smoothness of preprocessing')
 
 args = parser.parse_args()
+
+print(f"Starting MDMR Process\nGroup: {args.group}\nVariable: {args.variable}\nSmoothness: {args.smoothness}")
+
 
 # Get parameters from args
 subject_group = args.group
 variable_of_interest = args.variable
-
+smoothness = args.smoothness
 data_handler = DataHandler()
-subjects = data_handler.subject_dict_maker(subject_group)
+subjects = data_handler.subject_dict_maker(subject_group, smoothness)
 target_subject_index = False
-mask_file = data_handler.get_mask_file(subject_group)
+mask_file = data_handler.get_mask_file(subject_group, smoothness)
 regressor_file = data_handler.get_regressor_file(subject_group, variable_of_interest)
 participant_column = "Participant"
 columns_string = variable_of_interest
 permutations = 15000
-voxel_range = data_handler.get_voxel_range(subject_group)
-
+voxel_range = data_handler.get_voxel_range(subject_group,smoothness)
 
 temp_dir, voxel_range = nifti_cwas(subjects, mask_file, regressor_file, participant_column,
-               columns_string, permutations, variable_of_interest, voxel_range, subject_group, target_subject_index)
+               columns_string, permutations, variable_of_interest, smoothness, voxel_range, subject_group, target_subject_index)
 
 cwas_batches = [
     (temp_dir, voxel_range)
 ]
 
 z_score = [1]  # if you want to compute Z-scores
-F_file, p_file, log_p_file, one_p_file, z_file = merge_cwas_batches(cwas_batches, mask_file, z_score, permutations, subject_group,variable_of_interest)
+F_file, p_file, log_p_file, one_p_file, z_file = merge_cwas_batches(cwas_batches, mask_file, z_score, permutations, subject_group,variable_of_interest, smoothness)
 
 print("Results saved to:")
 print(F_file)

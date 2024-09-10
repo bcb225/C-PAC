@@ -48,9 +48,11 @@ def calc_mdmrs(D, regressor, cols, permutations):
     return F_set, p_set
 
 
-def calc_subdists(subjects_data, voxel_range, subject_group,target_subject_index):
-    distance_file_name = f"../../output/distance/{subject_group}_distance.npy"
-
+def calc_subdists(subjects_data, voxel_range, subject_group,target_subject_index,smoothness):
+    distance_dir = Path(f"../../output/distance/{smoothness}mm/")
+    distance_dir.mkdir(parents=True, exist_ok=True)
+    distance_file_name = distance_dir / f"{subject_group}_distance.npy"
+   
     if os.path.exists(distance_file_name):
         # 파일이 존재하는 경우: 파일을 로드
         print(f"Loading distance data from {distance_file_name}")
@@ -67,7 +69,6 @@ def calc_subdists(subjects_data, voxel_range, subject_group,target_subject_index
             print(distances.shape)
             return distances
         else:
-            print("NOT slicing")
             print(distances.shape)
             return distances
     else:
@@ -87,13 +88,13 @@ def calc_subdists(subjects_data, voxel_range, subject_group,target_subject_index
         return D
 
 
-def calc_cwas(subjects_data, regressor, regressor_selected_cols, permutations, voxel_range, subject_group,target_subject_index):
+def calc_cwas(subjects_data, regressor, regressor_selected_cols, permutations, voxel_range, subject_group,target_subject_index,smoothness):
     start_time = time.time()
-    D = calc_subdists(subjects_data, voxel_range, subject_group,target_subject_index)
+    D = calc_subdists(subjects_data, voxel_range, subject_group,target_subject_index,smoothness)
     end_time = time.time()
 
     elapsed_time = end_time - start_time
-    print(f"calc_subdists time: {elapsed_time:.2f} seconds")
+    #print(f"calc_subdists time: {elapsed_time:.2f} seconds")
 
     start_time = time.time()
     F_set, p_set = calc_mdmrs(
@@ -111,7 +112,7 @@ def pval_to_zval(p_set, permu):
     return zvals
 
 def nifti_cwas(subjects, mask_file, regressor_file, participant_column,
-               columns_string, permutations, variable_of_interest, voxel_range, subject_group, target_subject_index):
+               columns_string, permutations, variable_of_interest, smoothness, voxel_range, subject_group, target_subject_index):
     """
     Performs CWAS for a group of subjects
     
@@ -167,8 +168,8 @@ def nifti_cwas(subjects, mask_file, regressor_file, participant_column,
     # Validate and filter subjects based on target_subject_index
     if target_subject_index:
         if any(idx >= len(subject_ids) for idx in target_subject_index):
-            print(len(subject_ids))
-            print(target_subject_index)
+            print(f"Total Number of Participants: {len(subject_ids)}")
+            #print(target_subject_index)
             raise ValueError('Index out of range in target_subject_index.')
 
         filtered_subject_ids = [subject_ids[idx] for idx in target_subject_index]
@@ -215,6 +216,8 @@ def nifti_cwas(subjects, mask_file, regressor_file, participant_column,
         .reset_index(drop=True) \
         .values \
         .astype(np.float64)
+    print(f"Regressor shape: {regressor.shape}")
+    print(f"Total Number of Participants: {len(subject_files)}")
     if len(regressor.shape) == 1:
         regressor = regressor[:, np.newaxis]
     elif len(regressor.shape) != 2:
@@ -229,10 +232,10 @@ def nifti_cwas(subjects, mask_file, regressor_file, participant_column,
     ])
 
     F_set, p_set = calc_cwas(subjects_data, regressor, regressor_selected_cols,
-                             permutations, voxel_range, subject_group,target_subject_index)
+                             permutations, voxel_range, subject_group,target_subject_index,smoothness)
     
     
-    raw_dir = Path(f"/home/changbae/fmri_project/C-PAC/CPAC/bcb_mdmr/output/{subject_group}/{variable_of_interest}/temp/raw")
+    raw_dir = Path(f"/home/changbae/fmri_project/C-PAC/CPAC/bcb_mdmr/output/{smoothness}mm/{subject_group}/{variable_of_interest}/temp/raw")
     raw_dir.mkdir(parents=True, exist_ok=True)
 
     F_file = raw_dir /f"pseudo_F.npy"
@@ -240,7 +243,7 @@ def nifti_cwas(subjects, mask_file, regressor_file, participant_column,
     for i in range (0,p_set.shape[0]):
         p_file = raw_dir / f"significance_{i}.npy"
         np.save(p_file, p_set[i,:])
-    temp_dir = Path(f"/home/changbae/fmri_project/C-PAC/CPAC/bcb_mdmr/output/{subject_group}/{variable_of_interest}/temp")
+    temp_dir = Path(f"/home/changbae/fmri_project/C-PAC/CPAC/bcb_mdmr/output/{smoothness}mm/{subject_group}/{variable_of_interest}/temp")
     # Ensure the directory exists
     temp_dir.mkdir(parents=True, exist_ok=True)
     return temp_dir, voxel_range
@@ -263,7 +266,7 @@ def volumize(mask_image, data):
     )
 
 
-def merge_cwas_batches(cwas_batches, mask_file, z_score, permutations, subject_group, variable_of_interest):
+def merge_cwas_batches(cwas_batches, mask_file, z_score, permutations, subject_group, variable_of_interest, smoothness):
     _, voxel_range = zip(*cwas_batches)
     voxels = np.array(np.concatenate(voxel_range))
 
@@ -292,7 +295,7 @@ def merge_cwas_batches(cwas_batches, mask_file, z_score, permutations, subject_g
     log_p_vol = volumize(mask_image, log_p_set)
     one_p_vol = volumize(mask_image, one_p_set)
 
-    base_dir = Path(f"/home/changbae/fmri_project/C-PAC/CPAC/bcb_mdmr/output/{subject_group}/{variable_of_interest}/result/")
+    base_dir = Path(f"/home/changbae/fmri_project/C-PAC/CPAC/bcb_mdmr/output/{smoothness}mm/{subject_group}/{variable_of_interest}/result/")
     base_dir.mkdir(parents=True, exist_ok=True)
     F_file = base_dir / f"pseudo_F_volume.nii.gz"
     p_file = base_dir / f"p_significance_volume.nii.gz"
@@ -301,7 +304,7 @@ def merge_cwas_batches(cwas_batches, mask_file, z_score, permutations, subject_g
 
     base_dir.mkdir(parents=True, exist_ok=True)
 
-    volume_dir = Path(f"/home/changbae/fmri_project/C-PAC/CPAC/bcb_mdmr/output/{subject_group}/{variable_of_interest}/temp/volume")
+    volume_dir = Path(f"/home/changbae/fmri_project/C-PAC/CPAC/bcb_mdmr/output/{smoothness}mm/{subject_group}/{variable_of_interest}/temp/volume")
     volume_dir.mkdir(parents=True, exist_ok=True)
 
     for i in range(0,permutations):
@@ -314,18 +317,18 @@ def merge_cwas_batches(cwas_batches, mask_file, z_score, permutations, subject_g
     one_p_vol.to_filename(one_p_file)
     if 1 in z_score:
         zvals = pval_to_zval(p_set, permutations)
-        z_file = zstat_image(zvals, mask_file, subject_group, variable_of_interest)
+        z_file = zstat_image(zvals, mask_file, subject_group, variable_of_interest, smoothness)
     else:
         z_file = None
 
     return F_file, p_file, log_p_file, one_p_file, z_file
 
-def zstat_image(zvals, mask_file, subject_group, variable_of_interest):
+def zstat_image(zvals, mask_file, subject_group, variable_of_interest, smoothness):
     mask_image = nb.load(mask_file)
 
     z_vol = volumize(mask_image, zvals)
 
-    base_dir = Path(f"/home/changbae/fmri_project/C-PAC/CPAC/bcb_mdmr/output/{subject_group}/{variable_of_interest}/result/")
+    base_dir = Path(f"/home/changbae/fmri_project/C-PAC/CPAC/bcb_mdmr/output/{smoothness}mm/{subject_group}/{variable_of_interest}/result/")
     base_dir.mkdir(parents=True, exist_ok=True)
     z_file = base_dir / "zstat.nii.gz"
  

@@ -1,21 +1,22 @@
 #!/bin/bash
 
 # 파라미터 확인
-if [ "$#" -ne 1 ]; then
+if [ "$#" -ne 2 ]; then
     echo "사용법: $0 <subject_group>"
     exit 1
 fi
 
 # 파라미터 할당
 subject_group=$1
+smoothness=$2
 input_file="../../input/${subject_group}_code_list.csv"  # CSV 파일 경로
 maskdir="../../template/"  # 현재 작업 디렉토리
-maskfile="../../template/${subject_group}_group_mask.nii.gz"  # 최종 그룹 마스크 파일명
+maskfile="../../template/${subject_group}_group_mask_${smoothness}mm.nii.gz"  # 최종 그룹 마스크 파일명
 grey_matter="../../template/tpl-MNI152NLin2009cAsym_space-MNI_res-01_class-GM_probtissue.nii.gz"
-resampled_gm="../../template/${subject_group}_resampled_gm.nii.gz"  # 재샘플링된 GM 파일명
-threshold_gm="../../template/${subject_group}_threshold_gm.nii.gz"  # 임계값이 적용된 GM 파일명
-final_mask="../../template/${subject_group}_final_group_mask.nii.gz"
-group_prop_mask="../../template/${subject_group}_group_prop_subjs.nii.gz"
+resampled_gm="../../template/${subject_group}_resampled_gm_${smoothness}mm.nii.gz"  # 재샘플링된 GM 파일명
+threshold_gm="../../template/${subject_group}_threshold_gm_${smoothness}mm.nii.gz"  # 임계값이 적용된 GM 파일명
+final_mask="../../template/${subject_group}_final_group_mask_${smoothness}mm.nii.gz"
+group_prop_mask="../../template/${subject_group}_group_prop_subjs_${smoothness}mm.nii.gz"
 
 # 기본 fMRI 파일 경로 패턴
 base_path="/mnt/NAS2-2/data/SAD_gangnam_resting_2/fMRIPrep_total"
@@ -26,7 +27,7 @@ funcpaths=()
 echo "CSV 파일 내용 확인:"
 while IFS=, read -r subject_code; do
     #echo "읽은 subject code: $subject_code"
-    func_path="${base_path}/sub-${subject_code}/${mask_suffix}/sub-${subject_code}_ses-01_task-rest_space-MNI152NLin2009cAsym_desc-smoothed8mm_resampled4mm_bold.nii.gz"
+    func_path="${base_path}/sub-${subject_code}/${mask_suffix}/sub-${subject_code}_ses-01_task-rest_space-MNI152NLin2009cAsym_desc-smoothed${smoothness}mm_resampled4mm_bold.nii.gz"
     #echo "확인 중: ${func_path}"
     if [ -f "${func_path}" ]; then
         funcpaths+=("${func_path}")

@@ -7,6 +7,7 @@ base_dir="../../output/"
 group=""
 variable=""
 permutations=0
+smoothness=-1
 
 # Parse named arguments
 while [[ "$#" -gt 0 ]]; do
@@ -14,14 +15,15 @@ while [[ "$#" -gt 0 ]]; do
         --group) group="$2"; shift ;;
         --variable) variable="$2"; shift ;;
         --permutations) permutations="$2"; shift ;;
+        --smoothness) smoothness="$2"; shift ;;
         *) echo "Unknown parameter passed: $1"; exit 1 ;;
     esac
     shift
 done
 
 # Check if all required parameters are set
-if [[ -z "$group" || -z "$variable" || -z "$permutations" ]]; then
-    echo "Error: All parameters --group, --variable, and --permutations must be provided."
+if [[ -z "$group" || -z "$variable" || -z "$permutations" || -z "$smoothness" ]]; then
+    echo "Error: All parameters --group, --variable, --permutations. --smoothness must be provided."
     exit 1
 fi
 
@@ -31,13 +33,13 @@ process_permutation() {
     local group=$2
     local variable=$3
     local base_dir=$4
+    local smoothness=$5
+    input_file="${base_dir}/${smoothness}mm/${group}/${variable}/temp/volume/p_significance_volume_${i}.nii.gz"
+    mask_file="${base_dir}/${smoothness}mm/${group}/${variable}/temp/mask/mask_${i}.nii.gz"
+    output_file="${base_dir}/${smoothness}mm/${group}/${variable}/temp/cluster_report/cluster_report_${i}.txt"
 
-    input_file="${base_dir}/${group}/${variable}/temp/volume/p_significance_volume_${i}.nii.gz"
-    mask_file="${base_dir}/${group}/${variable}/temp/mask/mask_${i}.nii.gz"
-    output_file="${base_dir}/${group}/${variable}/temp/cluster_report/cluster_report_${i}.txt"
-
-    mkdir -p "${base_dir}/${group}/${variable}/temp/mask"
-    mkdir -p "${base_dir}/${group}/${variable}/temp/cluster_report"
+    mkdir -p "${base_dir}/${smoothness}mm/${group}/${variable}/temp/mask"
+    mkdir -p "${base_dir}/${smoothness}mm/${group}/${variable}/temp/cluster_report"
 
     if [[ ! -f $input_file ]]; then
         echo "Error: Input file $input_file does not exist. Skipping this permutation."
@@ -62,6 +64,6 @@ process_permutation() {
 export -f process_permutation
 
 # Run the permutations in parallel with progress bar
-seq 0 $((permutations - 1)) | parallel -j 20 --bar process_permutation {} "$group" "$variable" "$base_dir"
+seq 0 $((permutations - 1)) | parallel -j 20 --bar process_permutation {} "$group" "$variable" "$base_dir" "$smoothness"
 
 echo "모든 permutation이 그룹 $group과 변수 $variable에 대해 처리되었습니다."

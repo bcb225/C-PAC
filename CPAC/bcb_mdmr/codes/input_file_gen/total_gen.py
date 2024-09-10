@@ -27,14 +27,24 @@ def main(group_name, predictor_file_name, variable_of_interest):
     # Filter out rows where any of the specified columns are missing
     required_columns = ['LSAS', 'LSAS_performance', 'LSAS_social_interaction', 'SEX', 'AGE', 'YR_EDU']
     data_filtered = data.dropna(subset=required_columns)
+    # Keep only rows where 'Participant' starts with 's'
+
+    
+    new_participant_list = []
+    participant_list = data_filtered['Participant'].tolist()
+    for participant in participant_list:
+        mean = mean_framewise_displacement(participant)
+        if mean >= 0:
+            new_participant_list.append(participant)
+
+    participant_list = new_participant_list
+    data_filtered = data_filtered[data_filtered['Participant'].isin(new_participant_list)]
     
     if variable_of_interest in data.columns:
+        print(f"Processing {variable_of_interest}")
         # Select relevant columns for the regressor file
         regressor_data = data_filtered[['Participant', 'SEX', 'AGE', 'YR_EDU', variable_of_interest]]
-        
-        # Get the list of participants from the filtered data
-        participant_list = data_filtered['Participant'].tolist()
-
+    
         # Create a list to store the mean framewise displacement for each participant
         mean_displacement_list = []
 
@@ -72,21 +82,26 @@ def main(group_name, predictor_file_name, variable_of_interest):
     # 
     # LSAS, LSAS_performance, LSAS_social_interaction, 1. SEX,2.AGE,3-2. YR_EDU 없는 사람들 제거
 def mean_framewise_displacement(participant):
-    confounds_file = f"/mnt/NAS2-2/data/SAD_gangnam_resting_2/fMRIPrep_total/sub-{participant}/ses-01/func/sub-{participant}_ses-01_task-rest_desc-confounds_timeseries.tsv"
-    confound = pd.read_csv(
-        confounds_file,
-        delimiter='\t'
-    )
-    # Exclude the first row and calculate the mean of the remaining values
-    mean = confound['framewise_displacement'].iloc[1:].mean()
-    return mean
+    try:
+        confounds_file = f"/mnt/NAS2-2/data/SAD_gangnam_resting_2/fMRIPrep_total/sub-{participant}/ses-01/func/sub-{participant}_ses-01_task-rest_desc-confounds_timeseries.tsv"
+        confound = pd.read_csv(
+            confounds_file,
+            delimiter='\t'
+        )
+        # Exclude the first row and calculate the mean of the remaining values
+        mean = confound['framewise_displacement'].iloc[1:].mean()
+        return mean
+    except:
+        print(f"Participant {participant} fMRI data not exists")
+        return -1
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Process some data.")
+    #parser = argparse.ArgumentParser(description="Process some data.")
     
     #parser.add_argument("--group", type=str, required=True, help="The name of the group")
-    parser.add_argument("--variable", type=str, required=True, help="The variable of interest to analyze")
-    
-    args = parser.parse_args()
+    #parser.add_argument("--variable", type=str, required=True, help="The variable of interest to analyze")
+    variable_list = ["STAI-X-1","STAI-X-2","HADS_anxiety","HADS_depression","SWLS","GAD-7","PDSS","LSAS_performance","LSAS_social_interaction","LSAS","MOCI","MOCI_checking","MOCI_cleaning","MOCI_doubting","MOCI_slowness","BFNE","PSWQ","FCV-19S"]
+    #args = parser.parse_args()
     group_name = "gangnam_total"
     predictor_file_name = "../../input/participant_demo_clinical_all.csv"
-    main(group_name, predictor_file_name, args.variable)
+    for variable in variable_list:
+        main(group_name, predictor_file_name, variable)

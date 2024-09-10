@@ -4,8 +4,8 @@ import numpy as np
 from tqdm import tqdm
 from multiprocessing import Pool
 
-def process_report(i, group, variable):
-    report_path = f"../../output/{group}/{variable}/temp/cluster_report/cluster_report_{i}.txt"
+def process_report(i, group, variable, smoothness):
+    report_path = f"../../output/{smoothness}mm/{group}/{variable}/temp/cluster_report/cluster_report_{i}.txt"
     try:
         report = pd.read_csv(report_path, delimiter='\t')
         if 'Voxels' in report.columns and len(report) > 0:
@@ -19,9 +19,9 @@ def process_report(i, group, variable):
     
     return max_voxel_count
 
-def calculate_threshold_cluster_size(group, variable, permutations=15000, alpha_level=0.05, num_cores=20):
+def calculate_threshold_cluster_size(group, variable, smoothness, permutations=15000, alpha_level=0.05, num_cores=20):
     with Pool(processes=num_cores) as pool:
-        results = list(tqdm(pool.starmap(process_report, [(i, group, variable) for i in range(1, permutations)]),
+        results = list(tqdm(pool.starmap(process_report, [(i, group, variable, smoothness) for i in range(1, permutations)]),
                             total=permutations-1))
 
     # None 값 제거
@@ -52,6 +52,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Calculate threshold cluster size.")
     parser.add_argument("--group", required=True, help="Group name (e.g., 'gangnam_total')")
     parser.add_argument("--variable", required=True, help="Variable name (e.g., 'LSAS')")
+    parser.add_argument("--smoothness", required=True, help="Smoothness 6 or 8")
     parser.add_argument("--permutations", type=int, default=15000, help="Number of permutations (default: 15000)")
     parser.add_argument("--alpha_level", type=float, default=0.05, help="Alpha level (default: 0.05)")
     parser.add_argument("--num_cores", type=int, default=20, help="Number of cores to use (default: 20)")
@@ -60,5 +61,5 @@ if __name__ == "__main__":
 
     # 인자에 따라 함수 호출
     threshold_cluster_size = calculate_threshold_cluster_size(
-        args.group, args.variable, args.permutations, args.alpha_level, args.num_cores
+        args.group, args.variable, args.smoothness, args.permutations, args.alpha_level, args.num_cores
     )
