@@ -49,7 +49,7 @@ def calc_mdmrs(D, regressor, cols, permutations):
 
 
 def calc_subdists(subjects_data, voxel_range, subject_group,target_subject_index,smoothness):
-    distance_dir = Path(f"../../output/distance/{smoothness}mm/")
+    distance_dir = Path(f"/mnt/NAS2-2/data/SAD_gangnam_MDMR/distance/{smoothness}mm/")
     distance_dir.mkdir(parents=True, exist_ok=True)
     distance_file_name = distance_dir / f"{subject_group}_distance.npy"
    
@@ -235,7 +235,7 @@ def nifti_cwas(subjects, mask_file, regressor_file, participant_column,
                              permutations, voxel_range, subject_group,target_subject_index,smoothness)
     
     
-    raw_dir = Path(f"/home/changbae/fmri_project/C-PAC/CPAC/bcb_mdmr/output/{smoothness}mm/{subject_group}/{variable_of_interest}/temp/raw")
+    raw_dir = Path(f"/mnt/NAS2-2/data/SAD_gangnam_MDMR/{smoothness}mm/{subject_group}/{variable_of_interest}/temp/raw")
     raw_dir.mkdir(parents=True, exist_ok=True)
 
     F_file = raw_dir /f"pseudo_F.npy"
@@ -243,7 +243,7 @@ def nifti_cwas(subjects, mask_file, regressor_file, participant_column,
     for i in range (0,p_set.shape[0]):
         p_file = raw_dir / f"significance_{i}.npy"
         np.save(p_file, p_set[i,:])
-    temp_dir = Path(f"/home/changbae/fmri_project/C-PAC/CPAC/bcb_mdmr/output/{smoothness}mm/{subject_group}/{variable_of_interest}/temp")
+    temp_dir = Path(f"/mnt/NAS2-2/data/SAD_gangnam_MDMR/{smoothness}mm/{subject_group}/{variable_of_interest}/temp")
     # Ensure the directory exists
     temp_dir.mkdir(parents=True, exist_ok=True)
     return temp_dir, voxel_range
@@ -295,7 +295,7 @@ def merge_cwas_batches(cwas_batches, mask_file, z_score, permutations, subject_g
     log_p_vol = volumize(mask_image, log_p_set)
     one_p_vol = volumize(mask_image, one_p_set)
 
-    base_dir = Path(f"/home/changbae/fmri_project/C-PAC/CPAC/bcb_mdmr/output/{smoothness}mm/{subject_group}/{variable_of_interest}/result/")
+    base_dir = Path(f"/mnt/NAS2-2/data/SAD_gangnam_MDMR/{smoothness}mm/{subject_group}/{variable_of_interest}/result/")
     base_dir.mkdir(parents=True, exist_ok=True)
     F_file = base_dir / f"pseudo_F_volume.nii.gz"
     p_file = base_dir / f"p_significance_volume.nii.gz"
@@ -304,7 +304,7 @@ def merge_cwas_batches(cwas_batches, mask_file, z_score, permutations, subject_g
 
     base_dir.mkdir(parents=True, exist_ok=True)
 
-    volume_dir = Path(f"/home/changbae/fmri_project/C-PAC/CPAC/bcb_mdmr/output/{smoothness}mm/{subject_group}/{variable_of_interest}/temp/volume")
+    volume_dir = Path(f"/mnt/NAS2-2/data/SAD_gangnam_MDMR/{smoothness}mm/{subject_group}/{variable_of_interest}/temp/volume")
     volume_dir.mkdir(parents=True, exist_ok=True)
 
     for i in range(0,permutations):
@@ -328,7 +328,7 @@ def zstat_image(zvals, mask_file, subject_group, variable_of_interest, smoothnes
 
     z_vol = volumize(mask_image, zvals)
 
-    base_dir = Path(f"/home/changbae/fmri_project/C-PAC/CPAC/bcb_mdmr/output/{smoothness}mm/{subject_group}/{variable_of_interest}/result/")
+    base_dir = Path(f"/mnt/NAS2-2/data/SAD_gangnam_MDMR/{smoothness}mm/{subject_group}/{variable_of_interest}/result/")
     base_dir.mkdir(parents=True, exist_ok=True)
     z_file = base_dir / "zstat.nii.gz"
  

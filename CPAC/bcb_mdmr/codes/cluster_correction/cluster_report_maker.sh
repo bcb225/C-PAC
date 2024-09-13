@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Base directory is defined here
-base_dir="../../output/"
+base_dir="/mnt/NAS2-2/data/SAD_gangnam_MDMR/"
 
 # Default values for parameters (optional)
 group=""
