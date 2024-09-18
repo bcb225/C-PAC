@@ -38,7 +38,7 @@ for subject_id in tqdm(subject_id_list, desc="Processing Subjects"):
        func_filename,#confounds=[confound_filename]
     )
     
-    brain_masker = seed_masker = NiftiMasker(
+    brain_masker = NiftiMasker(
         mask_img = f"{mdmr_dir}/template/gangnam_total_final_group_mask_{args.smoothness}mm.nii.gz",
         standardize="zscore_sample",
         standardize_confounds="zscore_sample",
