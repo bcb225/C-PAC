@@ -47,3 +47,4 @@ cpac_runs/
 .DS_Store
 
 CPAC/bcb_mdmr/output/
+CPAC/bcb_mdmr/codes/seed_based_analysis/permutation_results/
