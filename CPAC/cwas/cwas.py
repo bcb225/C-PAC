@@ -42,9 +42,9 @@ def joint_mask(subjects, mask_file=None):
     return mask_file
 
 
-def calc_mdmrs(D, regressor, cols, permutations):
+def calc_mdmrs(D, regressor, cols, permutations, mask_file, base_dir):
     cols = np.array(cols, dtype=np.int32)
-    F_set, p_set = mdmr(D, regressor, cols, permutations)
+    F_set, p_set = mdmr(D, regressor, cols, permutations, mask_file, base_dir)
     return F_set, p_set
 
 
@@ -88,7 +88,7 @@ def calc_subdists(subjects_data, voxel_range, subject_group,target_subject_index
         return D
 
 
-def calc_cwas(subjects_data, regressor, regressor_selected_cols, permutations, voxel_range, subject_group,target_subject_index,smoothness):
+def calc_cwas(subjects_data, regressor, regressor_selected_cols, permutations, voxel_range, subject_group,target_subject_index,smoothness, mask_file, base_dir):
     start_time = time.time()
     D = calc_subdists(subjects_data, voxel_range, subject_group,target_subject_index,smoothness)
     end_time = time.time()
@@ -98,7 +98,8 @@ def calc_cwas(subjects_data, regressor, regressor_selected_cols, permutations, v
 
     start_time = time.time()
     F_set, p_set = calc_mdmrs(
-        D, regressor, regressor_selected_cols, permutations)
+        D, regressor, regressor_selected_cols, permutations, mask_file, base_dir
+    )
     end_time = time.time()
     elapsed_time = end_time - start_time
     print(f"calc_mdmrs time: {elapsed_time:.2f} seconds")
@@ -143,6 +144,7 @@ def nifti_cwas(subjects, mask_file, regressor_file, participant_column,
         easier
         
     """
+    base_dir = Path(f"/mnt/NAS2-2/data/SAD_gangnam_MDMR/{smoothness}mm/{subject_group}/{variable_of_interest}/result/")
     try:
         regressor_data = pd.read_table(regressor_file,
                                        sep=None, engine="python",
@@ -232,7 +234,7 @@ def nifti_cwas(subjects, mask_file, regressor_file, participant_column,
     ])
 
     F_set, p_set = calc_cwas(subjects_data, regressor, regressor_selected_cols,
-                             permutations, voxel_range, subject_group,target_subject_index,smoothness)
+                             permutations, voxel_range, subject_group,target_subject_index,smoothness, mask_file, base_dir)
     
     
     raw_dir = Path(f"/mnt/NAS2-2/data/SAD_gangnam_MDMR/{smoothness}mm/{subject_group}/{variable_of_interest}/temp/raw")
