@@ -71,8 +71,9 @@ def calc_subdists(subjects_data, voxel_range, subject_group,target_subject_index
         else:
             print(distances.shape)
             return distances
-    else:
-        print(f"Calculating distance for the first time.")
+    elif subject_group == "all":
+        print("Total participant and not calculated before.")
+        print("Total participant distance should be calculated at least once")
         subjects, voxels, _ = subjects_data.shape
         D = np.zeros((len(voxel_range), subjects, subjects))
         for i, v in tqdm(enumerate(voxel_range), total=len(voxel_range)):
@@ -86,6 +87,22 @@ def calc_subdists(subjects_data, voxel_range, subject_group,target_subject_index
         D = np.sqrt(2.0 * (1.0 - D))
         np.save(distance_file_name, D)
         return D
+    else:
+        print(f"Subset of participant and not calculated before.")
+        print("The distance file can be extracted from the total distance file.")
+        total_distance_filename = distance_dir / "all_distance.npy"
+        total_distance = np.load(total_distance_filename)
+        total_code_list = pd.read_csv("../../input/all_code_list.csv", header=None)
+        curr_code_list = pd.read_csv(f"../../input/{subject_group}_code_list.csv", header=None)
+        
+        mapping = curr_code_list[0].apply(lambda x: total_code_list[total_code_list[0] == x].index.tolist())
+
+        mapping = mapping.explode().reset_index()
+        mapping.columns = ['curr_code_list', 'total_code_index']
+        total_indices = mapping["total_code_index"].astype(int).values
+        curr_distance = total_distance[:, total_indices][:, :, total_indices].astype(np.float64).copy()
+        np.save(distance_file_name, curr_distance)
+        return curr_distance
 
 
 def calc_cwas(subjects_data, regressor, regressor_selected_cols, permutations, voxel_range, subject_group,target_subject_index,smoothness, mask_file, base_dir):

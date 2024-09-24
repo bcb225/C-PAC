@@ -7,6 +7,7 @@ class DataHandler:
     def subject_dict_maker(self,subject_group, smoothness):
         subject_code_list_file = f"/home/changbae/fmri_project/C-PAC/CPAC/bcb_mdmr/input/{subject_group}_code_list.csv"
         subject_code_list = pd.read_csv(subject_code_list_file, header=None)
+        #temp code subject_code_list = pd.read_csv(subject_code_list_file)
         subject_codes = (subject_code_list.values)
         subject_dict = {}
         for subject_code in subject_codes:
