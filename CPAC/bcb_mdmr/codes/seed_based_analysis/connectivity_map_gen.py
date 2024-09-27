@@ -10,6 +10,7 @@ parser = argparse.ArgumentParser(description='Run CWAS analysis.')
 parser.add_argument('--group', type=str, required=True, help='Subject group name')
 parser.add_argument('--variable', type=str, required=True, help='Variable of interest')
 parser.add_argument('--smoothness', type=str, required=True, help='Smoothness of preprocessing')
+parser.add_argument('--roi', type=str, required=True, help='ROI name of the cluster')
 args = parser.parse_args()
 
 mdmr_dir = "/home/changbae/fmri_project/C-PAC/CPAC/bcb_mdmr/"
@@ -22,12 +23,12 @@ regressor_df = pd.read_csv(
     f"{mdmr_dir}/input/{args.group}_{args.variable}_regressor.csv"
 )
 
-print(f"Creating Z-map\nSEED: [SMOOTHNESS: {args.smoothness}mm] [GROUP: {args.group}] [VARIABLE: {args.variable}]")
+print(f"Creating Z-map\nSEED: [SMOOTHNESS: {args.smoothness}mm] [GROUP: {args.group}] [VARIABLE: {args.variable}] [ROI: {args.roi}]")
 
 subject_id_list = regressor_df["Participant"].values
 for subject_id in tqdm(subject_id_list, desc="Processing Subjects"):
     seed_masker = NiftiMasker(
-        mask_img = f"{MDMR_output_dir}/{args.smoothness}mm/{args.group}/{args.variable}/result/significant_cluster.nii.gz",
+        mask_img = f"{MDMR_output_dir}/{args.smoothness}mm/{args.group}/{args.variable}/result/significant_cluster_{args.roi}.nii.gz",
         standardize="zscore_sample",
         standardize_confounds="zscore_sample",
     )
@@ -59,7 +60,7 @@ for subject_id in tqdm(subject_id_list, desc="Processing Subjects"):
     seed_to_voxel_correlations_fisher_z_img = brain_masker.inverse_transform(
         seed_to_voxel_correlations_fisher_z.T
     )
-    os.makedirs(f"{seed_anal_dir}/{args.smoothness}mm/corr_z-map/seed_{args.group}_{args.variable}", exist_ok=True)
+    os.makedirs(f"{seed_anal_dir}/{args.smoothness}mm/corr_z-map/seed_{args.group}_{args.variable}_{args.roi}", exist_ok=True)
     seed_to_voxel_correlations_fisher_z_img.to_filename(
-        f"{seed_anal_dir}/{args.smoothness}mm/corr_z-map/seed_{args.group}_{args.variable}/sub-{subject_id}_fisher_z_img.nii.gz"
+        f"{seed_anal_dir}/{args.smoothness}mm/corr_z-map/seed_{args.group}_{args.variable}_{args.roi}/sub-{subject_id}_fisher_z_img.nii.gz"
     )

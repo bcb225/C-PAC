@@ -48,4 +48,4 @@ cpac_runs/
 
 CPAC/bcb_mdmr/output/
 CPAC/bcb_mdmr/codes/seed_based_analysis/permutation_results/
-CPAC/bcb_mdmr/input/
+CPAC/bcb_mdmr/regressor/

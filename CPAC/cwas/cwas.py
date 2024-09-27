@@ -42,9 +42,9 @@ def joint_mask(subjects, mask_file=None):
     return mask_file
 
 
-def calc_mdmrs(D, regressor, cols, permutations, mask_file, base_dir):
+def calc_mdmrs(D, regressor, cols, permutations, mask_file, base_dir, mode):
     cols = np.array(cols, dtype=np.int32)
-    F_set, p_set = mdmr(D, regressor, cols, permutations, mask_file, base_dir)
+    F_set, p_set = mdmr(D, regressor, cols, permutations, mask_file, base_dir, mode)
     return F_set, p_set
 
 
@@ -90,7 +90,7 @@ def calc_subdists(subjects_data, voxel_range, subject_group,target_subject_index
     else:
         print(f"Subset of participant and not calculated before.")
         print("The distance file can be extracted from the total distance file.")
-        total_distance_filename = distance_dir / "all_distance.npy"
+        total_distance_filename = distance_dir / "1_distance.npy"
         total_distance = np.load(total_distance_filename)
         total_code_list = pd.read_csv("../../input/all_code_list.csv", header=None)
         curr_code_list = pd.read_csv(f"../../input/{subject_group}_code_list.csv", header=None)
@@ -105,7 +105,7 @@ def calc_subdists(subjects_data, voxel_range, subject_group,target_subject_index
         return curr_distance
 
 
-def calc_cwas(subjects_data, regressor, regressor_selected_cols, permutations, voxel_range, subject_group,target_subject_index,smoothness, mask_file, base_dir):
+def calc_cwas(subjects_data, regressor, regressor_selected_cols, permutations, voxel_range, subject_group,target_subject_index,smoothness, mask_file, base_dir, mode):
     start_time = time.time()
     D = calc_subdists(subjects_data, voxel_range, subject_group,target_subject_index,smoothness)
     end_time = time.time()
@@ -115,7 +115,7 @@ def calc_cwas(subjects_data, regressor, regressor_selected_cols, permutations, v
 
     start_time = time.time()
     F_set, p_set = calc_mdmrs(
-        D, regressor, regressor_selected_cols, permutations, mask_file, base_dir
+        D, regressor, regressor_selected_cols, permutations, mask_file, base_dir, mode
     )
     end_time = time.time()
     elapsed_time = end_time - start_time
@@ -130,7 +130,7 @@ def pval_to_zval(p_set, permu):
     return zvals
 
 def nifti_cwas(subjects, mask_file, regressor_file, participant_column,
-               columns_string, permutations, variable_of_interest, smoothness, voxel_range, subject_group, target_subject_index):
+               columns_string, permutations, variable_of_interest, smoothness, voxel_range, subject_group, target_subject_index, mode):
     """
     Performs CWAS for a group of subjects
     
@@ -187,7 +187,7 @@ def nifti_cwas(subjects, mask_file, regressor_file, participant_column,
     # Validate and filter subjects based on target_subject_index
     if target_subject_index:
         if any(idx >= len(subject_ids) for idx in target_subject_index):
-            print(f"Total Number of Participants: {len(subject_ids)}")
+            #print(f"Total Number of Participants: {len(subject_ids)}")
             #print(target_subject_index)
             raise ValueError('Index out of range in target_subject_index.')
 
@@ -235,8 +235,9 @@ def nifti_cwas(subjects, mask_file, regressor_file, participant_column,
         .reset_index(drop=True) \
         .values \
         .astype(np.float64)
-    print(f"Regressor shape: {regressor.shape}")
-    print(f"Total Number of Participants: {len(subject_files)}")
+    #print(f"Regressor shape: {regressor.shape}")
+    print(f"Total Number of Participants: {regressor.shape[0]}")
+    print(f"Total Number of Variable (including covariates): {regressor.shape[1]}")
     if len(regressor.shape) == 1:
         regressor = regressor[:, np.newaxis]
     elif len(regressor.shape) != 2:
@@ -251,7 +252,7 @@ def nifti_cwas(subjects, mask_file, regressor_file, participant_column,
     ])
 
     F_set, p_set = calc_cwas(subjects_data, regressor, regressor_selected_cols,
-                             permutations, voxel_range, subject_group,target_subject_index,smoothness, mask_file, base_dir)
+                             permutations, voxel_range, subject_group,target_subject_index,smoothness, mask_file, base_dir, mode)
     
     
     raw_dir = Path(f"/mnt/NAS2-2/data/SAD_gangnam_MDMR/{smoothness}mm/{subject_group}/{variable_of_interest}/temp/raw")

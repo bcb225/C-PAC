@@ -1,44 +1,39 @@
-dp_call_variables = [
-    'phone_calls_rapids_incoming_countmostfrequentcontact_weekends',
-    'phone_calls_rapids_incoming_count_weekends',
-    'phone_calls_rapids_incoming_distinctcontacts_weekends',
-    'phone_calls_rapids_incoming_entropyduration_weekends',
-    'phone_calls_rapids_incoming_maxduration_weekends',
-    'phone_calls_rapids_incoming_meanduration_weekends',
-    'phone_calls_rapids_incoming_minduration_weekends',
-    'phone_calls_rapids_incoming_modeduration_weekends',
-    'phone_calls_rapids_incoming_stdduration_weekends',
-    'phone_calls_rapids_incoming_sumduration_weekends',
-    'phone_calls_rapids_incoming_timefirstcall_weekends',
-    'phone_calls_rapids_incoming_timelastcall_weekends',
-    'phone_calls_rapids_missed_countmostfrequentcontact_weekends',
-    'phone_calls_rapids_missed_count_weekends',
-    'phone_calls_rapids_missed_distinctcontacts_weekends',
-    'phone_calls_rapids_missed_timefirstcall_weekends',
-    'phone_calls_rapids_missed_timelastcall_weekends',
-    'phone_calls_rapids_outgoing_countmostfrequentcontact_weekends',
-    'phone_calls_rapids_outgoing_count_weekends',
-    'phone_calls_rapids_outgoing_distinctcontacts_weekends',
-    'phone_calls_rapids_outgoing_entropyduration_weekends',
-    'phone_calls_rapids_outgoing_maxduration_weekends',
-    'phone_calls_rapids_outgoing_meanduration_weekends',
-    'phone_calls_rapids_outgoing_minduration_weekends',
-    'phone_calls_rapids_outgoing_modeduration_weekends',
-    'phone_calls_rapids_outgoing_stdduration_weekends',
-    'phone_calls_rapids_outgoing_sumduration_weekends',
-    'phone_calls_rapids_outgoing_timefirstcall_weekends',
-    'phone_calls_rapids_outgoing_timelastcall_weekends'
-]
+from pathlib import Path
 
+# Define input directory
+input_dir = "../../input/"
+input_path = Path(input_dir)
 
-# Generate MDMR commands for dp_app variables
+# Initialize a list to store commands
 commands = []
-for variable in dp_call_variables:
-    command = f"python run_mdmr.py --group dp_call --variable {variable} --smoothness 6 && "
-    commands.append(command)
+dp_group_names = ["dp_app", "dp_location", "dp_light", "dp_screen", "dp_call"]
+variable_dict = {group: [] for group in dp_group_names}
+# Iterate through files in the directory
+for file in input_path.glob("**/*"):
+    # Check if it's a file and matches the condition (starts with 'dp', ends with 'regressor', and does not contain 'code_list')
+    if file.is_file() and file.name.startswith("dp") and file.name.endswith("regressor.csv") and "code_list" not in file.name:
+        # Split the filename into parts
+        parts = file.stem.split("_")
+        
+        # Extract dp_group (e.g., dp_app, dp_screen, etc.)
+        dp_group = "_".join(parts[:2])
+        
+        # Extract variable (everything after dp_group and remove 'regressor' from the end)
+        variable = "_".join(parts[2:]).replace("_regressor", "")
+        
+        # Create the command
+        command = f"python run_mdmr.py --group {dp_group} --variable {variable} --smoothness 6 --mode scan"
+        
+        # Append the command to the list
+        commands.append(command)
+        
+        if dp_group in variable_dict:
+            variable_dict[dp_group].append(variable)
 
-# Write the commands to a text file
-output_file_path = "./dp_call_mdmr_commands.txt"
-with open(output_file_path, "w") as out_file:
-    for command in commands:
-        out_file.write(command + "\n")
+# Join the commands with '&&' to create a single output
+output_command = " && ".join(commands)
+
+# Output the final command
+#print(output_command)
+for dp_group_name in dp_group_names:
+    print(f"{dp_group_name} # of variables: {len(variable_dict[dp_group_name])}")

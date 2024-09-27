@@ -12,11 +12,11 @@ def process_report(i, group, variable, smoothness):
         if 'Voxels' in report.columns and len(report) > 0:
             max_voxel_count = report['Voxels'].values[0]
         else:
-            print(f"Warning: File {report_path} is empty or does not contain 'Voxels' column.")
-            max_voxel_count = None
+            #print(f"Warning: File {report_path} is empty or does not contain 'Voxels' column.")
+            max_voxel_count = 0
     except Exception as e:
         print(f"Error reading {report_path}: {e}")
-        max_voxel_count = None
+        max_voxel_count = 0
     
     return max_voxel_count
 

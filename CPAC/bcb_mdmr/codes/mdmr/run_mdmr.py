@@ -22,31 +22,32 @@ from DataHandler import DataHandler
 
 # Set up argument parser
 parser = argparse.ArgumentParser(description='Run CWAS analysis.')
-parser.add_argument('--group', type=str, required=True, help='Subject group name')
-parser.add_argument('--variable', type=str, required=True, help='Variable of interest')
+parser.add_argument('--regressor_file', type=str, required=True, help="Regressor filename (csv)")
 parser.add_argument('--smoothness', type=str, required=True, help='Smoothness of preprocessing')
+parser.add_argument('--mode', type=str, required=True, help='Mode of preprocessing')
 
 args = parser.parse_args()
 
-print(f"Starting MDMR Process\nGroup: {args.group}\nVariable: {args.variable}\nSmoothness: {args.smoothness}")
-
 
 # Get parameters from args
-subject_group = args.group
-variable_of_interest = args.variable
+regressor_file = args.regressor_file
 smoothness = args.smoothness
 data_handler = DataHandler()
-subjects = data_handler.subject_dict_maker(subject_group, smoothness)
+variable_of_interest = data_handler.get_variable(regressor_file)
+subjects = data_handler.subject_dict_maker(regressor_file, smoothness)
+subject_group = data_handler.get_subject_group(regressor_file)
 target_subject_index = False
-mask_file = data_handler.get_mask_file(subject_group, smoothness)
-regressor_file = data_handler.get_regressor_file(subject_group, variable_of_interest)
+mask_file = data_handler.get_mask_file(smoothness)
+regressor_file = data_handler.get_regressor_file(regressor_file)
 participant_column = "Participant"
 columns_string = variable_of_interest
+mode = args.mode
 permutations = 15000
-voxel_range = data_handler.get_voxel_range(subject_group,smoothness)
+voxel_range = data_handler.get_voxel_range(smoothness)
+print(f"Starting MDMR Process Regressor File: {args.regressor_file}\nSubject Group Index: {subject_group}\nVariable of Interest: {variable_of_interest}\nSmoothness: {args.smoothness}")
 
 temp_dir, voxel_range = nifti_cwas(subjects, mask_file, regressor_file, participant_column,
-               columns_string, permutations, variable_of_interest, smoothness, voxel_range, subject_group, target_subject_index)
+               columns_string, permutations, variable_of_interest, smoothness, voxel_range, subject_group, target_subject_index, mode)
 
 cwas_batches = [
     (temp_dir, voxel_range)

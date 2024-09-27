@@ -4,12 +4,14 @@ import nibabel as nb
 import subprocess
 import pandas as pd
 import csv
-
+import os 
 def check_rank(X):
     k    = X.shape[1]
     rank = np.linalg.matrix_rank(X)
     if rank < k:
-        raise Exception("matrix is rank deficient (rank %i vs cols %i)" % (rank, k))
+        print("Rank Deficient Terminating")
+        exit(0)
+        #raise Exception("matrix is rank deficient (rank %i vs cols %i)" % (rank, k))
 
 def hat(X):
     Q1, _ = np.linalg.qr(X)
@@ -74,9 +76,16 @@ def ftest_fast(Hs, IHs, Gs, df_among, df_resid, **ssq_kwrds):
     F = (SS_among / df_among) / (SS_resid / df_resid)
     return F
 
-def mdmr(D, X, columns, permutations, mask_file, base_dir):
+def mdmr(D, X, columns, permutations, mask_file, base_dir, mode):
     mask_image = nb.load(mask_file)
     p_file = base_dir / f"p_significance_volume.nii.gz"
+    # Check if the file exists
+    if not os.path.exists(base_dir):
+        os.makedirs(base_dir)
+        print(f"Base directory {base_dir} created.")
+    else:
+        print(f"Base directory {base_dir} already exists.")
+
     check_rank(X)
     
     subjects = X.shape[0]
@@ -128,11 +137,17 @@ def mdmr(D, X, columns, permutations, mask_file, base_dir):
             print("Saving First Result")
             p_vol = volumize(mask_image, p_vals)
             p_vol.to_filename(p_file)
-            evaluate_cluster_size(base_dir, cut_off = 15)
+            evaluate_cluster_size(base_dir, mode, cut_off = 15)
     return F_perms[0, :], all_p_vals
-def evaluate_cluster_size(base_dir, cut_off):
+def evaluate_cluster_size(base_dir, mode, cut_off):
     p_file = base_dir / "p_significance_volume.nii.gz"
     input_file= p_file
+    # Check if the file exists
+    if not os.path.exists(base_dir):
+        os.makedirs(base_dir)
+        print(f"Base directory {base_dir} created.")
+    else:
+        print(f"Base directory {base_dir} already exists.")
     
     mask_file= base_dir/"mask.nii.gz"
     output_file=base_dir/"cluster_report.tsv"
@@ -145,20 +160,25 @@ def evaluate_cluster_size(base_dir, cut_off):
             max_voxel_count = report['Voxels'].values[0]
         else:
             print(f"Warning: File {output_file} is empty or does not contain 'Voxels' column.")
-            max_voxel_count = None
+            max_voxel_count = 0
     except Exception as e:
         print(f"Error reading {output_file}: {e}")
-        max_voxel_count = None
+        max_voxel_count = 0
     print(f"Max Voxel Count: {max_voxel_count}")
     if max_voxel_count < cut_off:
         print("Significant Voxel Not Found... Early Terminating...")
         exit(0)
     else:
-        print("Significant Voxel Found!!! Keep analyzing...")
         with open('./MDMR_log.csv', mode='a', newline='', encoding='utf-8') as file:
             writer = csv.writer(file, quoting=csv.QUOTE_ALL)  # Add quoting to handle special characters
             writer.writerow([str(base_dir)])  # Store the path as a string inside a list
             print("Log written to ./MDMR_log.csv")
+        if mode == "scan":
+            print("Current mode is scanning mode, detailed analysis requires full mode parameter")
+            print("Early stopping for fast scan. Please run full mode in later session.")
+            exit(0)
+        elif mode == "full":
+            print("Significant Voxel Found!!! Keep analyzing...")
         
 def volumize(mask_image, data):
     mask_data = mask_image.get_fdata().astype('bool')
