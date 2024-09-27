@@ -1,7 +1,0 @@
-python run_mdmr.py --group dp_screen --variable phone_screen_rapids_avgdurationunlock_weekends --smoothness 6 && 
-python run_mdmr.py --group dp_screen --variable phone_screen_rapids_countepisodeunlock_weekends --smoothness 6 && 
-python run_mdmr.py --group dp_screen --variable phone_screen_rapids_firstuseafter00unlock_weekends --smoothness 6 && 
-python run_mdmr.py --group dp_screen --variable phone_screen_rapids_maxdurationunlock_weekends --smoothness 6 && 
-python run_mdmr.py --group dp_screen --variable phone_screen_rapids_mindurationunlock_weekends --smoothness 6 && 
-python run_mdmr.py --group dp_screen --variable phone_screen_rapids_stddurationunlock_weekends --smoothness 6 && 
-python run_mdmr.py --group dp_screen --variable phone_screen_rapids_sumdurationunlock_weekends --smoothness 6 && 
