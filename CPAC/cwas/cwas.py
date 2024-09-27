@@ -48,7 +48,7 @@ def calc_mdmrs(D, regressor, cols, permutations, mask_file, base_dir, mode):
     return F_set, p_set
 
 
-def calc_subdists(subjects_data, voxel_range, subject_group,target_subject_index,smoothness):
+def calc_subdists(subjects_data, voxel_range, subject_group,target_subject_index,smoothness, subjects):
     distance_dir = Path(f"/mnt/NAS2-2/data/SAD_gangnam_MDMR/distance/{smoothness}mm/")
     distance_dir.mkdir(parents=True, exist_ok=True)
     distance_file_name = distance_dir / f"{subject_group}_distance.npy"
@@ -92,10 +92,9 @@ def calc_subdists(subjects_data, voxel_range, subject_group,target_subject_index
         print("The distance file can be extracted from the total distance file.")
         total_distance_filename = distance_dir / "1_distance.npy"
         total_distance = np.load(total_distance_filename)
-        total_code_list = pd.read_csv("../../input/all_code_list.csv", header=None)
-        curr_code_list = pd.read_csv(f"../../input/{subject_group}_code_list.csv", header=None)
-        
-        mapping = curr_code_list[0].apply(lambda x: total_code_list[total_code_list[0] == x].index.tolist())
+        total_code_list = pd.read_csv("../../regressor/all_code_list.csv", header=None)
+        curr_code_list = pd.Series(list(subjects.keys()))
+        mapping = curr_code_list.apply(lambda x: total_code_list[total_code_list[0] == x].index.tolist())
 
         mapping = mapping.explode().reset_index()
         mapping.columns = ['curr_code_list', 'total_code_index']
@@ -105,9 +104,9 @@ def calc_subdists(subjects_data, voxel_range, subject_group,target_subject_index
         return curr_distance
 
 
-def calc_cwas(subjects_data, regressor, regressor_selected_cols, permutations, voxel_range, subject_group,target_subject_index,smoothness, mask_file, base_dir, mode):
+def calc_cwas(subjects_data, regressor, regressor_selected_cols, permutations, voxel_range, subject_group,target_subject_index,smoothness, mask_file, base_dir, mode, subjects):
     start_time = time.time()
-    D = calc_subdists(subjects_data, voxel_range, subject_group,target_subject_index,smoothness)
+    D = calc_subdists(subjects_data, voxel_range, subject_group,target_subject_index,smoothness, subjects)
     end_time = time.time()
 
     elapsed_time = end_time - start_time
@@ -252,7 +251,7 @@ def nifti_cwas(subjects, mask_file, regressor_file, participant_column,
     ])
 
     F_set, p_set = calc_cwas(subjects_data, regressor, regressor_selected_cols,
-                             permutations, voxel_range, subject_group,target_subject_index,smoothness, mask_file, base_dir, mode)
+                             permutations, voxel_range, subject_group,target_subject_index,smoothness, mask_file, base_dir, mode, subjects)
     
     
     raw_dir = Path(f"/mnt/NAS2-2/data/SAD_gangnam_MDMR/{smoothness}mm/{subject_group}/{variable_of_interest}/temp/raw")
