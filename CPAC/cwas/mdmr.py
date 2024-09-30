@@ -5,6 +5,10 @@ import subprocess
 import pandas as pd
 import csv
 import os 
+from pathlib import Path
+
+from nilearn.reporting import get_clusters_table
+from nilearn import image
 def check_rank(X):
     k    = X.shape[1]
     rank = np.linalg.matrix_rank(X)
@@ -137,11 +141,17 @@ def mdmr(D, X, columns, permutations, mask_file, base_dir, mode):
             print("Saving First Result")
             p_vol = volumize(mask_image, p_vals)
             p_vol.to_filename(p_file)
-            evaluate_cluster_size(base_dir, mode, cut_off = 15)
+            evaluate_cluster_size(base_dir, mode, mask_image, cut_off = 15)
     return F_perms[0, :], all_p_vals
-def evaluate_cluster_size(base_dir, mode, cut_off):
+def evaluate_cluster_size(base_dir, mode, mask_img, cut_off):
     p_file = base_dir / "p_significance_volume.nii.gz"
     input_file= p_file
+    p_img = image.load_img(input_file)
+    p_data = p_img.get_fdata()
+    one_minus_p_data = 1 - p_data
+    one_minus_p_img = image.new_img_like(p_img, one_minus_p_data)
+    masked_one_minus_p_img = image.math_img("img1 * img2", img1=one_minus_p_img, img2=mask_img)
+    table = get_clusters_table(masked_one_minus_p_img, stat_threshold=0.995, cluster_threshold=0)
     # Check if the file exists
     if not os.path.exists(base_dir):
         os.makedirs(base_dir)
@@ -149,23 +159,15 @@ def evaluate_cluster_size(base_dir, mode, cut_off):
     else:
         print(f"Base directory {base_dir} already exists.")
     
-    mask_file= base_dir/"mask.nii.gz"
-    output_file=base_dir/"cluster_report.tsv"
-    subprocess.run(['fslmaths', input_file, '-uthr', '0.005', '-bin', mask_file], check=True)
-    subprocess.run(['fsl-cluster', '-i', mask_file, '-t', '0.5'], stdout=open(output_file, 'w'), check=True)
-    
-    try:
-        report = pd.read_csv(output_file, delimiter='\t')
-        if 'Voxels' in report.columns and len(report) > 0:
-            max_voxel_count = report['Voxels'].values[0]
-        else:
-            print(f"Warning: File {output_file} is empty or does not contain 'Voxels' column.")
-            max_voxel_count = 0
-    except Exception as e:
-        print(f"Error reading {output_file}: {e}")
-        max_voxel_count = 0
-    print(f"Max Voxel Count: {max_voxel_count}")
-    if max_voxel_count < cut_off:
+    if not table.empty:
+        table['Cluster Size (mm3)'] = pd.to_numeric(table['Cluster Size (mm3)'], errors='coerce')
+        max_cluster_size = table["Cluster Size (mm3)"].max()
+        # NaN 값이 있는 경우 0으로 처리
+        if pd.isna(max_cluster_size):
+            max_cluster_size = 0
+    else:
+        max_cluster_size = 0
+    if max_cluster_size < cut_off * 64:
         print("Significant Voxel Not Found... Early Terminating...")
         exit(0)
     else:

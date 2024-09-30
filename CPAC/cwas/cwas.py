@@ -66,10 +66,10 @@ def calc_subdists(subjects_data, voxel_range, subject_group,target_subject_index
             distances = distances [:,target_subject_index,:][:,:,target_subject_index]
             # 이후 처리를 여기에 추가할 수 있습니다.
             # 예를 들어, distances를 이용한 분석이나 결과 반환
-            print(distances.shape)
+            #print(distances.shape)
             return distances
         else:
-            print(distances.shape)
+            #print(distances.shape)
             return distances
     elif subject_group == "all":
         print("Total participant and not calculated before.")
