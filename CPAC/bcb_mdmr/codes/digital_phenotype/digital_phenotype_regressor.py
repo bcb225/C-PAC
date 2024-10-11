@@ -80,7 +80,7 @@ def process_group(group_name, data_filtered, combined_data, week_type):
     data_filtered = data_filtered[data_filtered['Participant'].isin(new_participant_list)]
     
     # Add the mean framewise displacement column to data_filtered
-    data_filtered['mean_framewise_displacement'] = data_filtered['Participant'].map(displacement_dict)
+    data_filtered['Mean_Framewise_Displacement'] = data_filtered['Participant'].map(displacement_dict)
 
     # Exclude unnecessary columns for the regressor file
     columns_to_exclude = ['subjNum', 'fmri_code', 'fmri_date', 'window_start_date', 'window_end_date', 'row_number', 'chunk_num']
@@ -100,7 +100,7 @@ def process_group(group_name, data_filtered, combined_data, week_type):
 
         # Add the current variable to data_filtered and rename it with week_type
         variable_name_with_week = f"{variable}_{week_type}"
-        data_filtered_variable = data_filtered[['Participant', 'SEX', 'AGE', 'YR_EDU', 'mean_framewise_displacement']].copy()
+        data_filtered_variable = data_filtered[['Participant', 'SEX', 'AGE', 'YR_EDU', 'Mean_Framewise_Displacement']].copy()
         data_filtered_variable[variable_name_with_week] = combined_data.set_index('fmri_code').loc[data_filtered_variable['Participant'], variable].values
 
         # Skip this variable if any participant has missing values (NaN)
@@ -112,13 +112,13 @@ def process_group(group_name, data_filtered, combined_data, week_type):
 
 
         # Create the regressor file with the updated naming convention for each variable
-        regressor_file_name = f"../../input/{group_name}_{variable_name_with_week}_regressor.csv"
+        regressor_file_name = f"../../regressor/{group_name}_{variable_name_with_week}_regressor.csv"
         data_filtered_variable.to_csv(regressor_file_name, index=False)
         print(f"Regressor file saved as {regressor_file_name}")
 
         # Extract participants that have valid data for this variable and save them as a code list
         code_list = pd.Series(data_filtered_variable['Participant'].unique())
-        code_list_file_name = f"../../input/{group_name}_code_list.csv"
+        code_list_file_name = f"../../regressor/{group_name}_code_list.csv"
         code_list.to_csv(code_list_file_name, header=False, index=False)
         print(f"Code list for {variable_name_with_week} saved as {code_list_file_name}")
 

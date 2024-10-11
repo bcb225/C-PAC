@@ -71,7 +71,7 @@ def calc_subdists(subjects_data, voxel_range, subject_group,target_subject_index
         else:
             #print(distances.shape)
             return distances
-    elif subject_group == "all":
+    elif subject_group == 1:
         print("Total participant and not calculated before.")
         print("Total participant distance should be calculated at least once")
         subjects, voxels, _ = subjects_data.shape
@@ -245,10 +245,20 @@ def nifti_cwas(subjects, mask_file, regressor_file, participant_column,
         raise ValueError('Number of subjects does not match regressor size')
     mask = nb.load(mask_file).get_fdata().astype('bool')
     mask_indices = np.where(mask)
+    timepoints_list = []
+    for subject_file in subject_files:
+        img = nb.load(subject_file)
+        timepoints_list.append(img.shape[-1])
+    min_timepoints = min(timepoints_list)
+    print(f"Minimum number of timepoints across subjects: {min_timepoints}")
     subjects_data = np.array([
-        nb.load(subject_file).get_fdata().astype('float64')[mask_indices]
+        nb.load(subject_file).get_fdata().astype('float64')[mask_indices][:, :min_timepoints]
         for subject_file in subject_files
     ])
+    """subjects_data = np.array([
+        nb.load(subject_file).get_fdata().astype('float64')[mask_indices]
+        for subject_file in subject_files
+    ])"""
 
     F_set, p_set = calc_cwas(subjects_data, regressor, regressor_selected_cols,
                              permutations, voxel_range, subject_group,target_subject_index,smoothness, mask_file, base_dir, mode, subjects)

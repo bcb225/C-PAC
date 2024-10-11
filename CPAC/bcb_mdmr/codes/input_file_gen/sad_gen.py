@@ -1,18 +1,21 @@
 import pandas as pd
 import os
-import argparse
+from sklearn.preprocessing import StandardScaler
 
 def main(group_name, predictor_file_name, variable_of_interest):
     # Load the data
     data = pd.read_csv(predictor_file_name)
     
+    # Load valid participants from the CSV file and remove 'sub-' prefix
+    valid_participants = pd.read_csv("../../input/valid_after_post_fmriprep_processing.csv")['Participant']
+    valid_participants = valid_participants.str.replace('sub-', '', regex=False)
+
     # Assume these are the current names in the dataset for SEX, AGE, and YR_EDU
     current_sex_column = '1. SEX'  # Replace with the actual column name
     current_age_column = '2.AGE'   # Replace with the actual column name
     current_education_column = '3-2. YR_EDU'  # Replace with the actual column name
     current_participant_column = 'fmri_code'  # Replace with the actual column name
 
-    
     # Rename the columns to SEX, AGE, and YR_EDU
     data = data.rename(columns={
         current_sex_column: 'SEX',
@@ -27,61 +30,53 @@ def main(group_name, predictor_file_name, variable_of_interest):
     # Filter out rows where any of the specified columns are missing
     required_columns = ['LSAS', 'LSAS_performance', 'LSAS_social_interaction', 'SEX', 'AGE', 'YR_EDU']
     data_filtered = data.dropna(subset=required_columns)
-    # Keep only rows where 'Participant' starts with 's'
+    
+    # Only keep participants present in the valid participant list
+    data_filtered = data_filtered[data_filtered['Participant'].isin(valid_participants)]
+    
+    # Filter participants whose IDs start with 's'
     data_filtered = data_filtered[data_filtered['Participant'].str.startswith('s')]
 
-    
-    new_participant_list = []
-    participant_list = data_filtered['Participant'].tolist()
-    for participant in participant_list:
-        mean = mean_framewise_displacement(participant)
-        if mean >= 0:
-            new_participant_list.append(participant)
-
-    participant_list = new_participant_list
-    data_filtered = data_filtered[data_filtered['Participant'].isin(new_participant_list)]
-    
     if variable_of_interest in data.columns:
         print(f"Processing {variable_of_interest}")
+        
         # Select relevant columns for the regressor file
-        regressor_data = data_filtered[['Participant', 'SEX', 'AGE', 'YR_EDU', variable_of_interest]]
+        regressor_data = data_filtered[['Participant', 'SEX', 'AGE', 'YR_EDU', variable_of_interest]].copy()
     
         # Create a list to store the mean framewise displacement for each participant
         mean_displacement_list = []
+
+        participant_list = regressor_data['Participant'].tolist()
 
         for participant in participant_list:
             mean = mean_framewise_displacement(participant)
             mean_displacement_list.append(mean)
 
         # Add the mean framewise displacement to the regressor data
-        regressor_data['Mean_Framewise_Displacement'] = mean_displacement_list
+        regressor_data.loc[:, 'Mean_Framewise_Displacement'] = mean_displacement_list
 
-
-        # Create the regressor file
-        regressor_file_name = f"../../input/{group_name}_{variable_of_interest}_regressor.csv"
-
-        
-
+        # Save the original regressor file (non-scaled)
+        regressor_file_name = f"../../regressor/{group_name}_{variable_of_interest}_regressor_non_scaled.csv"
         regressor_data.to_csv(regressor_file_name, index=False)
-        print(f"Regressor file saved as {regressor_file_name}")
-        
-        # Create the code list file
-        code_list = data_filtered['Participant'].apply(lambda x: x.replace('sub-', ''))
-        code_list_file_name = f"../../input/{group_name}_code_list.csv"
-        code_list.to_csv(code_list_file_name, header=False, index=False)
-        print(f"Code list file saved as {code_list_file_name}")
-        
-        # Display summary statistics for the variable of interest
-        print(f"Data for {variable_of_interest}:")
-        print(data_filtered[variable_of_interest].describe())
+        print(f"Non-scaled regressor file saved as {regressor_file_name}")
+
+        # Standardize (scale) the regressor data, excluding SEX
+        scaler = StandardScaler()
+        regressor_data_scaled = regressor_data.copy()
+        regressor_data_scaled[['AGE', 'YR_EDU', variable_of_interest, 'Mean_Framewise_Displacement']] = scaler.fit_transform(
+            regressor_data[['AGE', 'YR_EDU', variable_of_interest, 'Mean_Framewise_Displacement']]
+        )
+
+        # Save the scaled regressor file
+        regressor_file_name_scaled = f"../../regressor/{group_name}_{variable_of_interest}_regressor_scaled.csv"
+        regressor_data_scaled.to_csv(regressor_file_name_scaled, index=False)
+        print(f"Scaled regressor file saved as {regressor_file_name_scaled}")
+
+        # (Other transformations remain unchanged)
+
     else:
         print(f"Variable {variable_of_interest} not found in the dataset.")
         
-    # mean framewise disaplacement도 covariate로 추가.
-    # 예시 경로: /mnt/NAS2-2/data/SAD_gangnam_resting_2/fMRIPrep_total/sub-c0017/ses-01/func/sub-c0017_ses-01_task-rest_desc-confounds_timeseries.tsv
-    # 위 TSV에서 framewise_displacement column의 mean 값을 covariate로 추가해야 함.
-    # 
-    # LSAS, LSAS_performance, LSAS_social_interaction, 1. SEX,2.AGE,3-2. YR_EDU 없는 사람들 제거
 def mean_framewise_displacement(participant):
     try:
         confounds_file = f"/mnt/NAS2-2/data/SAD_gangnam_resting_2/fMRIPrep_total/sub-{participant}/ses-01/func/sub-{participant}_ses-01_task-rest_desc-confounds_timeseries.tsv"
@@ -95,14 +90,10 @@ def mean_framewise_displacement(participant):
     except:
         print(f"Participant {participant} fMRI data not exists")
         return -1
+
 if __name__ == "__main__":
-    #parser = argparse.ArgumentParser(description="Process some data.")
-    
-    #parser.add_argument("--group", type=str, required=True, help="The name of the group")
-    #parser.add_argument("--variable", type=str, required=True, help="The variable of interest to analyze")
-    variable_list = ["STAI-X-1","STAI-X-2","HADS_anxiety","HADS_depression","SWLS","GAD-7","PDSS","LSAS_performance","LSAS_social_interaction","LSAS","MOCI","MOCI_checking","MOCI_cleaning","MOCI_doubting","MOCI_slowness","BFNE","PSWQ","FCV-19S"]
-    #args = parser.parse_args()
+    variable_list = ["STAI-X-1","STAI-X-2","HADS_anxiety","HADS_depression","SWLS","GAD-7","PDSS","LSAS_performance","LSAS_social_interaction","LSAS","MOCI","MOCI_checking","MOCI_cleaning","MOCI_doubting","MOCI_slowness","BFNE","PSWQ","FCV-19S","LSAS_performance_fear","LSAS_performance_avoidance","LSAS_social_fear","LSAS_social_avoidance","LSAS_fear","LSAS_avoidance"]
     group_name = "gangnam_sad"
-    predictor_file_name = "../../input/participant_demo_clinical_all.csv"
+    predictor_file_name = "../../input/participant_demo_clinical_all_new.csv"
     for variable in variable_list:
         main(group_name, predictor_file_name, variable)

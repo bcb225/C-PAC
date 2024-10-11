@@ -2,14 +2,14 @@
 
 # 파라미터 확인
 if [ "$#" -ne 2 ]; then
-    echo "사용법: $0 <subject_group>"
+    echo "사용법: $0 <subject_group> <smoothnes>"
     exit 1
 fi
 
 # 파라미터 할당
 subject_group=$1
 smoothness=$2
-input_file="../../input/${subject_group}_code_list.csv"  # CSV 파일 경로
+input_file="../../regressor/${subject_group}_code_list.csv"  # CSV 파일 경로
 maskdir="../../template/"  # 현재 작업 디렉토리
 maskfile="../../template/${subject_group}_group_mask_${smoothness}mm.nii.gz"  # 최종 그룹 마스크 파일명
 grey_matter="../../template/tpl-MNI152NLin2009cAsym_space-MNI_res-01_class-GM_probtissue.nii.gz"
@@ -26,10 +26,8 @@ mask_suffix="ses-01/func"
 funcpaths=()
 echo "CSV 파일 내용 확인:"
 while IFS=, read -r subject_code; do
-    #echo "읽은 subject code: $subject_code"
-    func_path="${base_path}/sub-${subject_code}/${mask_suffix}/sub-${subject_code}_ses-01_task-rest_space-MNI152NLin2009cAsym_desc-smoothed${smoothness}mm_resampled4mm_bold.nii.gz"
-    #echo "확인 중: ${func_path}"
-    if [ -f "${func_path}" ]; then
+    func_path="${base_path}/sub-${subject_code}/${mask_suffix}/sub-${subject_code}_ses-01_task-rest_space-MNI152NLin2009cAsym_desc-smoothed${smoothness}mm_resampled4mm_scrbold.nii.gz"
+    if [ -f "${func_path}" ];then
         funcpaths+=("${func_path}")
     else
         echo "파일을 찾을 수 없습니다: ${func_path}"
@@ -37,7 +35,7 @@ while IFS=, read -r subject_code; do
 done < "$input_file"
 
 n=${#funcpaths[@]}
-if [ $n -eq 0 ]; then
+if [ $n -eq 0 ];then
     echo "유효한 fMRI 파일이 없습니다. 종료합니다."
     exit 1
 fi
@@ -47,20 +45,20 @@ echo "처리할 피험자 수: ${n}"
 for (( i = 0; i < $n; i++ )); do
     func=${funcpaths[$i]}
     mask="${maskdir}/mask${i}.nii.gz"
-    #echo "생성 중: ${mask} (from ${func})"
-    #3dTstat -stdev -prefix ${mask} ${func}
     fslmaths ${func} -Tstd -bin ${mask}
+    
+    # 피험자별 활성화된 복셀 수 계산 및 출력
+    voxel_count=$(fslstats ${mask} -V | awk '{print $1}')
+    
+    if [ "$voxel_count" -le 70000 ]; then
+        echo "피험자 ${i+1} (${func}): 활성화된 복셀 수 = ${voxel_count}"
+    fi
 done
 
 # Take the mean of the masks
-# (i.e., proportion of subjects with value in each voxel)
 echo "마스크 평균 계산 중..."
 3dMean -prefix ${group_prop_mask} ${maskdir}/mask*.nii.gz
 
-# Optional: concatenate all the subject masks together to view them
-echo "마스크 병합 중..."
-
-# Get voxels with all subjects having a value
 echo "모든 피험자가 값을 가진 복셀 선택 중..."
 3dcalc -a ${group_prop_mask} -expr 'equals(a,1)' -prefix ${maskfile}
 
@@ -79,8 +77,8 @@ echo "그룹 마스크와 임계값이 적용된 GM 마스크 결합 중..."
 echo "최종 그룹 마스크가 ${final_mask}로 저장되었습니다."
 
 # 최종 마스크 파일의 활성화된 복셀 수 계산 및 출력
-voxel_count=$(fslstats ${final_mask} -V | awk '{print $1}')
-echo "최종 그룹 마스크의 활성화된 복셀 수: ${voxel_count}"
+final_voxel_count=$(fslstats ${final_mask} -V | awk '{print $1}')
+echo "최종 그룹 마스크의 활성화된 복셀 수: ${final_voxel_count}"
 
 # 임시 마스크 파일 삭제
 for (( i = 0; i < $n; i++ )); do

@@ -51,7 +51,7 @@ class DataHandler:
         subject_codes = (regressor["Participant"].tolist())
         subject_dict = {}
         for subject_code in subject_codes:
-            subject_fmri_dir = f"/mnt/NAS2-2/data/SAD_gangnam_resting_2/fMRIPrep_total/sub-{subject_code}/ses-01/func/sub-{subject_code}_ses-01_task-rest_space-MNI152NLin2009cAsym_desc-smoothed{smoothness}mm_resampled4mm_bold.nii.gz"
+            subject_fmri_dir = f"/mnt/NAS2-2/data/SAD_gangnam_resting_2/fMRIPrep_total/sub-{subject_code}/ses-01/func/sub-{subject_code}_ses-01_task-rest_space-MNI152NLin2009cAsym_desc-smoothed{smoothness}mm_resampled4mm_scrbold.nii.gz"
             subject_dict[subject_code] = subject_fmri_dir
         return subject_dict
     def get_mask_file(self, smoothness):

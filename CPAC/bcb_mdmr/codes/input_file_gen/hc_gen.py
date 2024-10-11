@@ -34,6 +34,9 @@ def main(group_name, predictor_file_name, variable_of_interest):
     # Only keep participants present in the valid participant list
     data_filtered = data_filtered[data_filtered['Participant'].isin(valid_participants)]
     
+    # Filter participants whose IDs start with 's'
+    data_filtered = data_filtered[data_filtered['Participant'].str.startswith('c')]
+
     if variable_of_interest in data.columns:
         print(f"Processing {variable_of_interest}")
         
@@ -90,7 +93,7 @@ def mean_framewise_displacement(participant):
 
 if __name__ == "__main__":
     variable_list = ["STAI-X-1","STAI-X-2","HADS_anxiety","HADS_depression","SWLS","GAD-7","PDSS","LSAS_performance","LSAS_social_interaction","LSAS","MOCI","MOCI_checking","MOCI_cleaning","MOCI_doubting","MOCI_slowness","BFNE","PSWQ","FCV-19S","LSAS_performance_fear","LSAS_performance_avoidance","LSAS_social_fear","LSAS_social_avoidance","LSAS_fear","LSAS_avoidance"]
-    group_name = "gangnam_total"
+    group_name = "gangnam_hc"
     predictor_file_name = "../../input/participant_demo_clinical_all_new.csv"
     for variable in variable_list:
         main(group_name, predictor_file_name, variable)
