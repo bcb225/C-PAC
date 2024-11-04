@@ -26,7 +26,7 @@ mask_suffix="ses-01/func"
 funcpaths=()
 echo "CSV 파일 내용 확인:"
 while IFS=, read -r subject_code; do
-    func_path="${base_path}/sub-${subject_code}/${mask_suffix}/sub-${subject_code}_ses-01_task-rest_space-MNI152NLin2009cAsym_desc-smoothed${smoothness}mm_resampled4mm_scrbold.nii.gz"
+    func_path="${base_path}/sub-${subject_code}/${mask_suffix}/sub-${subject_code}_ses-01_task-rest_space-MNI152NLin2009cAsym_desc-smoothed${smoothness}mm_resampled4mm_naturebold.nii.gz"
     if [ -f "${func_path}" ];then
         funcpaths+=("${func_path}")
     else

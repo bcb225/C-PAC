@@ -8,15 +8,17 @@ from nilearn.interfaces.fmriprep import load_confounds_strategy
 import numpy as np
 from nilearn.image import resample_img
 from concurrent.futures import ProcessPoolExecutor
+from itertools import repeat
 import os
 from tqdm import tqdm
 import pandas as pd
 import warnings
+import argparse
 
 # Ignore specific FutureWarning related to nilearn
 warnings.filterwarnings("ignore", category=FutureWarning, module="nilearn")
 
-def process_single_subject(subject_dir):
+def process_single_subject(subject_dir, scrub):
     try:
         func_dir = subject_dir / 'ses-01' / 'func'
 
@@ -40,26 +42,32 @@ def process_single_subject(subject_dir):
             # Load the fMRI data
             fmri_img = image.load_img(str(fmri_filename))
 
-            # Apply 8mm smoothing to the original image
+            # Apply 6mm smoothing to the original image
             fmri_smoothed_img = image.smooth_img(fmri_img, fwhm=8)
 
             # Resample the smoothed image to 4x4x4 mm voxel size
             fmri_resampled_img = resample_img(fmri_smoothed_img, target_affine=np.diag((4, 4, 4)))
 
-            # Load the confounds using load_confounds
+            # Load the confounds
             confounds_df = pd.read_csv(confound_filename, sep='\t')
 
             # Calculate mean framewise displacement (FD)
             mean_fd = confounds_df['framewise_displacement'].mean()
 
+            # Calculate the number of volumes where std_dvars > 1.5 or FD > 0.5mm
+            num_volumes = len(confounds_df)
+            #num_high_dvars_or_fd = ((confounds_df['std_dvars'] > 1.5) | (confounds_df['framewise_displacement'] > 0.5)).sum()
+            num_high_fd = ((confounds_df['framewise_displacement'] > 0.5)).sum()
+            percentage_high_dvars_or_fd = (num_high_fd / num_volumes) * 100
+
             # Load confounds with desired strategy
-            confounds, sample_mask = load_confounds_strategy(
-                str(fmri_filename), 
-                denoise_strategy="simple",  # Change to "scrubbing" if needed
-                global_signal="basic",
-                # Uncomment and set thresholds if using scrubbing
-                # fd_threshold=0.5, 
-                # std_dvars_threshold=1.5
+            confounds, sample_mask = load_confounds(
+                img_files=str(fmri_filename),
+                strategy=('motion', 'high_pass', 'wm_csf', 'global_signal'),
+                motion='full',
+                wm_csf='basic',
+                global_signal='basic',
+                demean=True
             )
 
             # Discard the first four volumes
@@ -91,7 +99,7 @@ def process_single_subject(subject_dir):
             fmri_denoised_img = masker.inverse_transform(fmri_denoised)
 
             # Define the output filename following the desired convention
-            output_filename = f"{subject_dir.name}_ses-01_task-rest_space-MNI152NLin2009cAsym_desc-smoothed8mm_resampled4mm_scrbold.nii.gz"
+            output_filename = f"{subject_dir.name}_ses-01_task-rest_space-MNI152NLin2009cAsym_desc-smoothed8mm_resampled4mm_{scrub}bold.nii.gz"
             output_path = func_dir / output_filename
 
             # Save the denoised image
@@ -102,7 +110,7 @@ def process_single_subject(subject_dir):
             denoised_length = fmri_denoised.shape[0] + 4  # Adding the discarded volumes
 
             # Return relevant information for further analysis
-            return resampled_length, denoised_length, mean_fd, subject_dir.name
+            return (resampled_length, denoised_length, mean_fd, percentage_high_dvars_or_fd, subject_dir.name)
 
         else:
             missing = []
@@ -118,7 +126,7 @@ def process_single_subject(subject_dir):
         print(f"Error processing {subject_dir.name}: {e}")
         return None
 
-def process_fmri_data_in_parallel_and_save(root_dir, output_csv_path):
+def process_fmri_data_in_parallel_and_save(root_dir, output_csv_path, scrub):
     root_path = Path(root_dir)
 
     # Get all the subject directories
@@ -130,37 +138,53 @@ def process_fmri_data_in_parallel_and_save(root_dir, output_csv_path):
     # Use tqdm to track the progress
     with ProcessPoolExecutor() as executor:
         # Wrap the map with tqdm for progress tracking
-        for result in tqdm(executor.map(process_single_subject, subject_dirs), total=len(subject_dirs), desc="Processing fMRI Data"):
+        for result in tqdm(executor.map(process_single_subject, subject_dirs, repeat(scrub)),
+                           total=len(subject_dirs), desc="Processing fMRI Data"):
             if result is not None:
                 results.append(result)
 
-    # Calculate the number of subjects with different criteria
     total_subjects = len(results)
     if total_subjects == 0:
         print("No valid subjects found.")
         return
 
-    # Calculate the proportions and counts for each criterion
-    count_r2_gt_2 = sum(1 for r in results if r[2] > 2)
-    count_r1_lt_08_r0 = sum(1 for r in results if r[1] < 0.8 * r[0])
-    count_valid_subjects = sum(1 for r in results if r[2] <= 2 and r[1] >= 0.8 * r[0])
+    # Initialize sets to track participants meeting each criterion
+    participants_c1 = set()  # Criterion 1: mean FD > 2mm
+    participants_c2 = set()  # Criterion 2: >20% volumes with std_dvars > 1.5 or FD > 0.5mm
 
-    # Calculate the proportions
-    proportion_r2_gt_2 = count_r2_gt_2 / total_subjects
-    proportion_r1_lt_08_r0 = count_r1_lt_08_r0 / total_subjects
-    proportion_valid_subjects = count_valid_subjects / total_subjects
+    # Loop over results to populate the sets
+    valid_participant_codes = []
+    for r in results:
+        resampled_length, denoised_length, mean_fd, percentage_high_dvars_or_fd, participant_code = r
+
+        c1 = mean_fd > 2
+        c2 = percentage_high_dvars_or_fd > 20
+
+        if c1:
+            participants_c1.add(participant_code)
+        if c2:
+            participants_c2.add(participant_code)
+
+        # Exclude participants meeting any criteria
+        if not (c1 or c2):
+            if denoised_length >= 0.8 * resampled_length:
+                valid_participant_codes.append(participant_code)
+
+    # Calculate counts for each criterion
+    count_c1 = len(participants_c1)
+    count_c2 = len(participants_c2)
+
+    # Calculate counts for both criteria
+    participants_c1_c2 = participants_c1 & participants_c2
+    count_c1_c2 = len(participants_c1_c2)
 
     # Print the counts and proportions
-    print(f"Subjects with mean FD > 2: {count_r2_gt_2} ({proportion_r2_gt_2:.2%})")
-    print(f"Subjects with denoised_length < 0.8 * resampled_length: {count_r1_lt_08_r0} ({proportion_r1_lt_08_r0:.2%})")
-    print(f"Valid subjects (mean FD <= 2 and denoised_length >= 0.8 * resampled_length): {count_valid_subjects} ({proportion_valid_subjects:.2%})")
+    print(f"Total subjects processed: {total_subjects}")
+    print(f"Subjects with mean FD > 2mm (Criterion 1): {count_c1} ({(count_c1/total_subjects)*100:.2f}%)")
+    print(f"Subjects with >20% volumes with FD > 0.5mm (Criterion 2): {count_c2} ({(count_c2/total_subjects)*100:.2f}%)")
+    print(f"Subjects meeting both Criteria 1 and 2: {count_c1_c2}")
 
-    # Extract participant codes from valid subjects
-    # To do this, we need to match the results with subject_dirs
-    # Since results are appended in the same order as executor.map, we can zip them accordingly
-    valid_participant_codes = [r[3] for r in results if r[2] <= 2 and r[1] >= 0.8 * r[0]]
-
-    # Save to CSV file
+    # Save valid participant codes to CSV file
     valid_df = pd.DataFrame({"Participant": valid_participant_codes})
     output_path = Path(output_csv_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)  # Create the directory if it doesn't exist
@@ -168,8 +192,13 @@ def process_fmri_data_in_parallel_and_save(root_dir, output_csv_path):
 
     print(f"Valid participant codes saved to {output_csv_path}")
 
-# Example usage:
-process_fmri_data_in_parallel_and_save(
-    root_dir="/mnt/NAS2-2/data/SAD_gangnam_resting_2/fMRIPrep_total/",
-    output_csv_path="/home/changbae/fmri_project/C-PAC/CPAC/bcb_mdmr/input/valid_after_post_fmriprep_processing.csv"
-)
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Process fMRI data and save valid participant codes.")
+    parser.add_argument('--scrub', required=True, help="Naming of the file.")
+
+    args = parser.parse_args()
+    process_fmri_data_in_parallel_and_save(
+        root_dir="/mnt/NAS2-2/data/SAD_gangnam_resting_2/fMRIPrep_total/",
+        output_csv_path="/home/changbae/fmri_project/C-PAC/CPAC/bcb_mdmr/input/valid_after_post_fmriprep_processing.csv",
+        scrub=args.scrub
+    )

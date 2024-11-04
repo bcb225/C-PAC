@@ -71,7 +71,7 @@ def calc_subdists(subjects_data, voxel_range, subject_group,target_subject_index
         else:
             #print(distances.shape)
             return distances
-    elif subject_group == 1:
+    else:
         print("Total participant and not calculated before.")
         print("Total participant distance should be calculated at least once")
         subjects, voxels, _ = subjects_data.shape
@@ -87,7 +87,7 @@ def calc_subdists(subjects_data, voxel_range, subject_group,target_subject_index
         D = np.sqrt(2.0 * (1.0 - D))
         np.save(distance_file_name, D)
         return D
-    else:
+        """else:
         print(f"Subset of participant and not calculated before.")
         print("The distance file can be extracted from the total distance file.")
         total_distance_filename = distance_dir / "1_distance.npy"
@@ -102,7 +102,7 @@ def calc_subdists(subjects_data, voxel_range, subject_group,target_subject_index
         curr_distance = total_distance[:, total_indices][:, :, total_indices].astype(np.float64).copy()
         np.save(distance_file_name, curr_distance)
         return curr_distance
-
+        """
 
 def calc_cwas(subjects_data, regressor, regressor_selected_cols, permutations, voxel_range, subject_group,target_subject_index,smoothness, mask_file, base_dir, mode, subjects):
     start_time = time.time()

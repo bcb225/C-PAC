@@ -6,16 +6,34 @@ import pandas as pd
 import csv
 import os 
 from pathlib import Path
+import sys
+# Remove asyncio import
+# import asyncio
+
+# Add the path to your Telegram module
+telegram_path = Path("../bcb_mdmr/codes/mdmr/")
+sys.path.append(str(telegram_path))
+
+# Import the modified Telegram class
+from Telegram import Telegram
+
+# Initialize the Telegram instance
+telegram = Telegram()
+
+# Function to print and send a Telegram message
+def print_and_send_telegram(message):
+    print(message)  # Existing print
+    telegram.send_msg(message)  # Synchronous call to send the message
 
 from nilearn.reporting import get_clusters_table
 from nilearn import image
+
 def check_rank(X):
     k    = X.shape[1]
     rank = np.linalg.matrix_rank(X)
     if rank < k:
         print("Rank Deficient Terminating")
         exit(0)
-        #raise Exception("matrix is rank deficient (rank %i vs cols %i)" % (rank, k))
 
 def hat(X):
     Q1, _ = np.linalg.qr(X)
@@ -53,18 +71,15 @@ def gen_h2_perms(x, cols, perms):
     for i in range(nperms):
         H2 = gen_h2(x, cols, perms[i,:])
         H2perms[:,i] = H2.flatten()
-
     return H2perms
 
 def gen_ih_perms(x, cols, perms):
     nperms, nobs = perms.shape
     I = np.eye(nobs, nobs)
-
     IHperms = np.zeros((nobs ** 2, nperms))
     for i in range(nperms):
         IH = I - gen_h(x, cols, perms[i, :])
         IHperms[:, i] = IH.flatten()
-
     return IHperms
 
 def calc_ssq_fast(Hs, Gs, transpose=True):
@@ -83,13 +98,13 @@ def ftest_fast(Hs, IHs, Gs, df_among, df_resid, **ssq_kwrds):
 def mdmr(D, X, columns, permutations, mask_file, base_dir, mode):
     mask_image = nb.load(mask_file)
     p_file = base_dir / f"p_significance_volume.nii.gz"
-    # Check if the file exists
+    # Ensure base directory exists
     if not os.path.exists(base_dir):
         os.makedirs(base_dir)
         print(f"Base directory {base_dir} created.")
     else:
         print(f"Base directory {base_dir} already exists.")
-
+    
     check_rank(X)
     
     subjects = X.shape[0]
@@ -102,10 +117,10 @@ def mdmr(D, X, columns, permutations, mask_file, base_dir, mode):
         Gs[:, di] = gower(D[di]).flatten()
     
     X1 = np.hstack((np.ones((subjects, 1)), X))
-    columns = columns.copy() #removed a +1
-
+    columns = columns.copy()
+    
     regressors = X1.shape[1]
-
+    
     permutation_indexes = np.zeros((permutations, subjects), dtype=int)
     permutation_indexes[0, :] = range(subjects)
     for i in range(1, permutations):
@@ -113,75 +128,79 @@ def mdmr(D, X, columns, permutations, mask_file, base_dir, mode):
     
     H2perms = gen_h2_perms(X1, columns, permutation_indexes)
     IHperms = gen_ih_perms(X1, columns, permutation_indexes)
-
+    
     df_among = len(columns)
     df_resid = subjects - regressors
-
+    
     F_perms = ftest_fast(H2perms, IHperms, Gs, df_among, df_resid)
-
-    """p_vals = (F_perms[1:, :] >= F_perms[0, :]) \
-                .sum(axis=0) \
-                .astype('float')
-    p_vals /= permutations"""
-
+    
     # Initialize an array to store p-values for each permutation
     all_p_vals = np.zeros_like(F_perms)
-
-    # Loop through each F_perms[i, :] as the reference, with tqdm for progress display
+    
+    # Loop through each permutation with tqdm for progress display
     for i in tqdm(range(F_perms.shape[0]), desc="Calculating p-values"):
         # Calculate p-values for F_perms[i, :] against all other permutations
         p_vals = (F_perms[np.arange(F_perms.shape[0]) != i, :] >= F_perms[i, :]) \
                     .sum(axis=0) \
                     .astype('float')
-        p_vals /= F_perms.shape[0]  # Adjust the division since we are excluding the current permutation
-
+        p_vals /= F_perms.shape[0]  # Adjust division since we exclude the current permutation
+        
         # Store the computed p-values for this permutation
         all_p_vals[i, :] = p_vals
         if i == 0:
             print("Saving First Result")
             p_vol = volumize(mask_image, p_vals)
             p_vol.to_filename(p_file)
-            evaluate_cluster_size(base_dir, mode, mask_image, cut_off = 15)
+            evaluate_cluster_size(base_dir, mode, mask_image, cut_off = 20)
     return F_perms[0, :], all_p_vals
+
 def evaluate_cluster_size(base_dir, mode, mask_img, cut_off):
     p_file = base_dir / "p_significance_volume.nii.gz"
-    input_file= p_file
+    input_file = p_file
     p_img = image.load_img(input_file)
     p_data = p_img.get_fdata()
     one_minus_p_data = 1 - p_data
     one_minus_p_img = image.new_img_like(p_img, one_minus_p_data)
     masked_one_minus_p_img = image.math_img("img1 * img2", img1=one_minus_p_img, img2=mask_img)
     table = get_clusters_table(masked_one_minus_p_img, stat_threshold=0.995, cluster_threshold=0)
-    # Check if the file exists
+    
+    # Ensure base directory exists
     if not os.path.exists(base_dir):
         os.makedirs(base_dir)
         print(f"Base directory {base_dir} created.")
     else:
         print(f"Base directory {base_dir} already exists.")
     
+    # Calculate cluster size
     if not table.empty:
         table['Cluster Size (mm3)'] = pd.to_numeric(table['Cluster Size (mm3)'], errors='coerce')
         max_cluster_size = table["Cluster Size (mm3)"].max()
-        # NaN 값이 있는 경우 0으로 처리
         if pd.isna(max_cluster_size):
             max_cluster_size = 0
     else:
         max_cluster_size = 0
+    
     if max_cluster_size < cut_off * 64:
-        print("Significant Voxel Not Found... Early Terminating...")
+        # No significant cluster found
+        message = (f"Significant Cluster Size {max_cluster_size//64}. "
+                   f"Significant Cluster Not Found... Early Terminating...")
+        print_and_send_telegram(message)
         exit(0)
     else:
+        # Significant cluster found
+        message = f"Cluster Size: {max_cluster_size//64}"
+        print_and_send_telegram(message)
         with open('./MDMR_log.csv', mode='a', newline='', encoding='utf-8') as file:
-            writer = csv.writer(file, quoting=csv.QUOTE_ALL)  # Add quoting to handle special characters
-            writer.writerow([str(base_dir)])  # Store the path as a string inside a list
+            writer = csv.writer(file, quoting=csv.QUOTE_ALL)
+            writer.writerow([str(base_dir)])
             print("Log written to ./MDMR_log.csv")
+        
         if mode == "scan":
-            print("Current mode is scanning mode, detailed analysis requires full mode parameter")
-            print("Early stopping for fast scan. Please run full mode in later session.")
+            print_and_send_telegram("Current mode is scanning mode, detailed analysis requires full mode parameter.\nEarly stopping for fast scan. Please run full mode in later session.")
             exit(0)
         elif mode == "full":
-            print("Significant Voxel Found!!! Keep analyzing...")
-        
+            print_and_send_telegram("Significant Voxel Found!!! Keep analyzing...")
+
 def volumize(mask_image, data):
     mask_data = mask_image.get_fdata().astype('bool')
     volume = np.zeros_like(mask_data, dtype=data.dtype)

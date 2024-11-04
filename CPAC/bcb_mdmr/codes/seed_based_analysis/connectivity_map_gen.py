@@ -8,6 +8,7 @@ from tqdm import tqdm
 from pathlib import Path
 import multiprocessing as mp
 from nilearn.image import math_img, load_img
+from nilearn.image import resample_to_img
 
 import sys
 from scipy.stats import pearsonr, zscore
@@ -45,39 +46,36 @@ cluster_report_filename = result_dir / "significant_cluster_report.csv"
 
 cluster_report_df = pd.read_csv(cluster_report_filename)
 #print(cluster_report_df.columns)
+# Ensure "Cluster ID" column is converted to string
+cluster_report_df["Cluster ID"] = cluster_report_df["Cluster ID"].astype(str)
+
+# Now you can apply the string method safely
 df_numeric_cluster = cluster_report_df[cluster_report_df["Cluster ID"].str.isnumeric()][["Cluster ID", "Center of Mass AAL Label"]]
 
 # Function to process subjects
 def process_subject(subject_id, aal_label, cluster_id):
-    func_filename = f"{fmri_prep_dir}/sub-{subject_id}/ses-01/func/sub-{subject_id}_ses-01_task-rest_space-MNI152NLin2009cAsym_desc-smoothed{args.smoothness}mm_resampled4mm_bold.nii.gz"
+    func_filename = f"{fmri_prep_dir}/sub-{subject_id}/ses-01/func/sub-{subject_id}_ses-01_task-rest_space-MNI152NLin2009cAsym_desc-smoothed{args.smoothness}mm_resampled4mm_naturebold.nii.gz"
     roi_filename = f"{MDMR_output_dir}/{args.smoothness}mm/{group_num}/{variable_name}/result/cluster_masks/MDMR_significant_aal({aal_label})_label({cluster_id}).nii.gz"
     brain_mask_filename = f"{mdmr_dir}/template/all_final_group_mask_{args.smoothness}mm.nii.gz"
     
     # Load the seed mask (ROI mask) and the brain mask using nilearn
     seed_mask_img = load_img(roi_filename)
     brain_mask_img = load_img(brain_mask_filename)
-    
+    seed_mask_img_resampled = resample_to_img(seed_mask_img, brain_mask_img, interpolation='nearest')
+    seed_mask_data = seed_mask_img_resampled.get_fdata()
+    num_seed_voxels = np.count_nonzero(seed_mask_data)
+    #print(f"Number of voxels in the seed mask: {num_seed_voxels}")
     # Create a new brain mask by excluding the seed region using nilearn's math_img
-    modified_brain_mask_img = math_img("brain_mask - seed_mask", brain_mask=brain_mask_img, seed_mask=seed_mask_img)
+    modified_brain_mask_img = math_img("brain_mask - seed_mask", brain_mask=brain_mask_img, seed_mask=seed_mask_img_resampled)
 
     # Define the seed masker using the seed mask for extracting time series from the seed region
     seed_masker = NiftiMasker(
-        mask_img=seed_mask_img,
-        detrend=True,
-        low_pass=0.1,
-        high_pass=0.01,
-        t_r = 2,
-        standardize=True,
+        mask_img=seed_mask_img_resampled,
     )
     
     # Define the brain masker using the modified brain mask for whole-brain time series extraction
     brain_masker = NiftiMasker(
         mask_img=brain_mask_img,
-        detrend=True,
-        low_pass=0.1,
-        high_pass=0.01,
-        t_r = 2,
-        standardize=True,
     )
 
 
@@ -91,6 +89,12 @@ def process_subject(subject_id, aal_label, cluster_id):
     # Demean the time series
     mean_seed_time_series = mean_seed_time_series - np.mean(mean_seed_time_series)
     brain_time_series = brain_time_series - np.mean(brain_time_series, axis=0)
+    """print(f"Seed time series shape: {seed_time_series.shape}")
+    print(f"Seed time series mean: {np.mean(seed_time_series)}")
+    print(f"Seed time series standard deviation: {np.std(seed_time_series)}")
+    print(f"Mean seed time series mean: {np.mean(mean_seed_time_series)}")
+    print(f"Mean seed time series standard deviation: {np.std(mean_seed_time_series)}")"""
+
 
     # 상관계수를 저장할 배열
     pearson_correlations = np.zeros(brain_time_series.shape[1])  # n_voxels 길이

@@ -48,7 +48,7 @@ def process_fmri(subject_group, smoothness):
     funcpaths = []
 
     for subject_code in df[0]:
-        func_path = os.path.join(base_path, f"sub-{subject_code}/{mask_suffix}/sub-{subject_code}_ses-01_task-rest_space-MNI152NLin2009cAsym_desc-smoothed{smoothness}mm_resampled4mm_scrbold.nii.gz")
+        func_path = os.path.join(base_path, f"sub-{subject_code}/{mask_suffix}/sub-{subject_code}_ses-01_task-rest_space-MNI152NLin2009cAsym_desc-smoothed{smoothness}mm_resampled4mm_naturebold.nii.gz")
         if os.path.exists(func_path):
             funcpaths.append(func_path)
         else:
@@ -131,3 +131,6 @@ def process_fmri(subject_group, smoothness):
 if __name__ == "__main__":
     # Call the function with desired parameters
     process_fmri("all", 8)
+    
+    
+

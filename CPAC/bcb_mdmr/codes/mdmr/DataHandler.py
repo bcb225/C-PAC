@@ -51,7 +51,7 @@ class DataHandler:
         subject_codes = (regressor["Participant"].tolist())
         subject_dict = {}
         for subject_code in subject_codes:
-            subject_fmri_dir = f"/mnt/NAS2-2/data/SAD_gangnam_resting_2/fMRIPrep_total/sub-{subject_code}/ses-01/func/sub-{subject_code}_ses-01_task-rest_space-MNI152NLin2009cAsym_desc-smoothed{smoothness}mm_resampled4mm_scrbold.nii.gz"
+            subject_fmri_dir = f"/mnt/NAS2-2/data/SAD_gangnam_resting_2/fMRIPrep_total/sub-{subject_code}/ses-01/func/sub-{subject_code}_ses-01_task-rest_space-MNI152NLin2009cAsym_desc-smoothed{smoothness}mm_resampled4mm_naturebold.nii.gz"
             subject_dict[subject_code] = subject_fmri_dir
         return subject_dict
     def get_mask_file(self, smoothness):
@@ -124,13 +124,18 @@ class DataHandler:
         self.session.add(new_group)
         self.session.commit()
         return new_group
-    def get_variable(self,regressor_file):
+    def get_variable(self, regressor_file):
         regressor_path = f"/home/changbae/fmri_project/C-PAC/CPAC/bcb_mdmr/regressor/{regressor_file}"
         regressor = pd.read_csv(regressor_path)
         exclude_columns = ['Participant', 'SEX', 'AGE', 'YR_EDU', 'Mean_Framewise_Displacement']
         
-        # 제외할 컬럼들을 제외한 나머지 컬럼 이름 추출
-        remaining_columns = [col for col in regressor.columns if col not in exclude_columns]
-        variables_string = ', '.join(remaining_columns)
-        # 나머지 컬럼 이름 반환
-        return variables_string
+        # 만약 파일 이름에 'additional'이 포함되어 있다면 마지막 컬럼을 반환
+        if 'additional' in regressor_file:
+            # 마지막 컬럼 (variable of interest) 추출
+            variable_of_interest = regressor.columns[-1]
+            return variable_of_interest
+        else:
+            # 제외할 컬럼들을 제외한 나머지 컬럼 이름 추출
+            remaining_columns = [col for col in regressor.columns if col not in exclude_columns]
+            variables_string = ', '.join(remaining_columns)
+            return variables_string

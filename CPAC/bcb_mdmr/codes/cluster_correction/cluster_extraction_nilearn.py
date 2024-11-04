@@ -12,34 +12,37 @@ from rpy2.robjects.packages import importr
 import re
 import sys
 sys.path.append('../mdmr/')
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning)
 from DataHandler import DataHandler  
+from nilearn.image import resample_to_img
 
-def process_nii_file(temp_dir, permut_index, mask_img):
+def process_nii_file(temp_dir, permut_index, mask_img, vox_threshold):
     nii_file = temp_dir / "volume" / f"p_significance_volume_{permut_index}.nii.gz"
     cluster_report_file = temp_dir / "cluster_report" / f"cluster_report_{permut_index}.csv"
     try:
         # Create the directory for cluster reports if it doesn't exist
         cluster_report_dir = temp_dir / "cluster_report"
         cluster_report_dir.mkdir(parents=True, exist_ok=True)
-        # p-value 이미지 로드
+        # p-value image load
         p_img = image.load_img(nii_file)
         p_data = p_img.get_fdata()
 
-        # 1 - p 계산
+        # Compute 1 - p
         one_minus_p_data = 1 - p_data
         one_minus_p_img = image.new_img_like(p_img, one_minus_p_data)
 
-        # 마스크 적용
+        # Apply mask
         masked_one_minus_p_img = image.math_img("img1 * img2", img1=one_minus_p_img, img2=mask_img)
 
-        # 클러스터 테이블 생성 (클러스터 크기 추출)
-        table = get_clusters_table(masked_one_minus_p_img, stat_threshold=0.995, cluster_threshold=0)
+        # Generate cluster table (extract cluster size)
+        table = get_clusters_table(masked_one_minus_p_img, stat_threshold=1 - vox_threshold, cluster_threshold=0)
 
-        # 클러스터 크기를 숫자로 변환하여 최대 클러스터 크기 추출
+        # Convert cluster size to numeric and extract max cluster size
         if not table.empty:
             table['Cluster Size (mm3)'] = pd.to_numeric(table['Cluster Size (mm3)'], errors='coerce')
             max_cluster_size = table["Cluster Size (mm3)"].max()
-            # NaN 값이 있는 경우 0으로 처리
+            # Handle NaN values
             table.to_csv(cluster_report_file)
             if pd.isna(max_cluster_size):
                 max_cluster_size = 0
@@ -52,29 +55,28 @@ def process_nii_file(temp_dir, permut_index, mask_img):
         print(f"Error processing file {nii_file}: {e}")
         return 0
 
-def max_cluster_distribution(temp_dir, mask_img, alpha_level, permutation):
+def max_cluster_distribution(temp_dir, mask_img, alpha_level, permutation, vox_threshold):
     max_voxel_list = []
 
     permutations = range(permutation)
 
-    # 병렬처리
+    # Parallel processing
     with ProcessPoolExecutor() as executor:
-        futures = {executor.submit(process_nii_file, temp_dir, permut_index, mask_img): permut_index for permut_index in permutations}
+        futures = {executor.submit(process_nii_file, temp_dir, permut_index, mask_img, vox_threshold): permut_index for permut_index in permutations}
 
         for future in tqdm(as_completed(futures), total=len(futures), desc="Processing NIfTI files"):
             max_cluster_size = future.result()
             max_voxel_list.append(max_cluster_size)
 
-    # 리스트 정렬
+    # Sort the list
     sorted_voxel_list = np.sort(max_voxel_list)
-    #print(sorted_voxel_list)
-    # x축은 0과 1 사이의 누적확률, y축은 클러스터 크기
+    # x-axis: cumulative probability between 0 and 1, y-axis: cluster size
     cumulative_prob = np.linspace(0, 1, len(sorted_voxel_list))
 
-    # scipy의 interp1d 함수를 사용하여 연속적인 값을 추정
+    # Use scipy's interp1d to estimate continuous values
     interpolation_function = interp1d(cumulative_prob, sorted_voxel_list, kind='linear', fill_value="extrapolate")
 
-    # alpha 레벨에 해당하는 값 추정 (e.g., 0.05)
+    # Estimate the value corresponding to the alpha level (e.g., 0.05)
     threshold_cluster_size = interpolation_function(1 - alpha_level)
 
     print(f"Alpha level of {alpha_level*100}% cluster size: {threshold_cluster_size}")
@@ -103,11 +105,11 @@ def parse_mni_to_region_name(result):
     
     return parsed_result
 
-def analyze_clusters(group, variable, smoothness, mask_img, vox_threhold, cluster_threshold_alpha):
+def analyze_clusters(group, variable, smoothness, mask_img, vox_threshold, cluster_threshold_alpha):
     nas_dir = Path("/mnt/NAS2-2/data/")
     MDMR_output_dir = nas_dir / "SAD_gangnam_MDMR"
 
-    mask_img_path = Path("../../template/all_final_group_mask_6mm.nii.gz")
+    mask_img_path = Path(f"../../template/all_final_group_mask_{smoothness}mm.nii.gz")
     result_dir = MDMR_output_dir / f"{smoothness}mm" / str(group) / variable / "result"
     temp_dir = MDMR_output_dir / f"{smoothness}mm" / str(group) / variable / "temp"
     p_volume_path = result_dir / "p_significance_volume.nii.gz"
@@ -115,6 +117,7 @@ def analyze_clusters(group, variable, smoothness, mask_img, vox_threhold, cluste
     # Load mask and p-value images
     mask_img = image.load_img(mask_img_path)
     p_img = image.load_img(p_volume_path)
+    mask_img = resample_to_img(mask_img, p_img)
     p_data = p_img.get_fdata()
 
     # Compute 1 - p
@@ -126,12 +129,15 @@ def analyze_clusters(group, variable, smoothness, mask_img, vox_threhold, cluste
 
     # Compute cluster threshold
     cluster_threshold = max_cluster_distribution(
-        temp_dir=temp_dir, mask_img=mask_img, alpha_level=cluster_threshold_alpha, permutation=15000
+        temp_dir=temp_dir, mask_img=mask_img, alpha_level=cluster_threshold_alpha, permutation=15000, vox_threshold = vox_threshold
     )
 
+    #임시, threshold 넘지는 않지만 꽤 유의한 cluster
+    #cluster_threshold = 1792
+    
     cluster_threshold_vox = cluster_threshold / 64
 
-    one_minus_p_threshold = 1 - vox_threhold
+    one_minus_p_threshold = 1 - vox_threshold
 
     # Generate cluster table and label maps
     table, label_maps = get_clusters_table(
@@ -175,27 +181,27 @@ def analyze_clusters(group, variable, smoothness, mask_img, vox_threhold, cluste
 
     return table, label_maps
 
-# 추가된 함수: 구형 마스크 생성
+# Function to create a spherical mask
 def create_sphere_mask(center_coords, radius, shape, affine):
     import numpy as np
     import nibabel
 
-    # 모든 복셀 인덱스 생성
+    # Generate all voxel indices
     xx, yy, zz = np.meshgrid(np.arange(shape[0]),
                              np.arange(shape[1]),
                              np.arange(shape[2]),
                              indexing='ij')
 
-    # 배열을 평탄화
+    # Flatten arrays
     voxel_coords = np.vstack([xx.ravel(), yy.ravel(), zz.ravel()]).T
 
-    # 복셀 좌표를 MNI 좌표로 변환
+    # Convert voxel coordinates to MNI coordinates
     mni_coords = nibabel.affines.apply_affine(affine, voxel_coords)
 
-    # 중심으로부터의 거리 계산
+    # Compute distances from the center
     distances = np.sqrt(np.sum((mni_coords - center_coords) ** 2, axis=1))
 
-    # 마스크 생성
+    # Create mask
     mask_data = (distances <= radius).astype(np.int8)
     mask_data = mask_data.reshape(shape)
 
@@ -207,6 +213,11 @@ def extract_cluster_mask(group, variable, smoothness, table, label_maps, mask_im
     import pandas as pd
     import nibabel
     import re
+
+    # Check if label_maps is empty
+    if not label_maps:
+        print("No label maps available. Skipping cluster mask extraction.")
+        return
 
     # Define directories
     nas_dir = Path("/mnt/NAS2-2/data/")
@@ -244,7 +255,7 @@ def extract_cluster_mask(group, variable, smoothness, table, label_maps, mask_im
         )
 
         if not cluster_table.empty:
-            # 피크 통계 좌표
+            # Peak statistic coordinates
             peak_x = cluster_table.iloc[0]['X']
             peak_y = cluster_table.iloc[0]['Y']
             peak_z = cluster_table.iloc[0]['Z']
@@ -293,32 +304,32 @@ def extract_cluster_mask(group, variable, smoothness, table, label_maps, mask_im
             region_img.to_filename(str(output_filename))
             print(f"Saved region {com_aal_label} (label {label}) to {output_filename}")
 
-            # 피크 통계 좌표 가져오기
+            # Peak statistic coordinates
             peak_coords = (region_info.iloc[0]['X'], region_info.iloc[0]['Y'], region_info.iloc[0]['Z'])
 
-            # 중심 좌표 가져오기 (만약 중심 좌표를 별도로 계산했다면 사용)
+            # Center of mass coordinates
             com_coords = (region_info.iloc[0]['Center of Mass X'], region_info.iloc[0]['Center of Mass Y'], region_info.iloc[0]['Center of Mass Z'])
 
-            # 구형 마스크 생성
-            radius = 6  # 반경 6mm
+            # Create spherical masks
+            radius = 6  # 6mm radius
             shape = label_img.shape[:3]
             affine = label_img.affine
 
-            # 피크 통계 좌표에 대한 구형 마스크
+            # Sphere mask for peak statistic coordinates
             peak_sphere_mask_data = create_sphere_mask(peak_coords, radius, shape, affine)
             peak_sphere_mask_img = image.new_img_like(label_img, peak_sphere_mask_data)
 
-            # 중심 좌표에 대한 구형 마스크
+            # Sphere mask for center of mass coordinates
             com_sphere_mask_data = create_sphere_mask(com_coords, radius, shape, affine)
             com_sphere_mask_img = image.new_img_like(label_img, com_sphere_mask_data)
 
-            # 마스크 저장
-            # 피크 통계 구형 마스크
+            # Save masks
+            # Peak statistic sphere mask
             peak_output_filename = output_dir / f"peak_stat_sphere_aal_{aal_label_clean}_label_{int(label)}.nii.gz"
             peak_sphere_mask_img.to_filename(str(peak_output_filename))
             print(f"Saved peak stat sphere mask for region {com_aal_label} (label {label}) to {peak_output_filename}")
 
-            # 중심 좌표 구형 마스크
+            # Center of mass sphere mask
             com_output_filename = output_dir / f"center_of_mass_sphere_aal_{aal_label_clean}_label_{int(label)}.nii.gz"
             com_sphere_mask_img.to_filename(str(com_output_filename))
             print(f"Saved center of mass sphere mask for region {com_aal_label} (label {label}) to {com_output_filename}")
@@ -337,7 +348,7 @@ def main():
     # Add arguments
     parser.add_argument('--regressor_file', type=str, required=True, help="Regressor file path.")
     parser.add_argument('--smoothness', type=int, default=6, help="Smoothness value (default: 6).")
-    parser.add_argument('--vox_threhold', type=float, default=0.005, help="Voxel threshold (default: 0.005).")
+    parser.add_argument('--vox_threshold', type=float, default=0.005, help="Voxel threshold (default: 0.005).")
     parser.add_argument('--cluster_threshold_alpha', type=float, default=0.05, help="Cluster threshold alpha level (default: 0.05).")
     
     # Parse arguments
@@ -350,7 +361,7 @@ def main():
     group_num = data_handler.get_subject_group(args.regressor_file)
     variable_name = data_handler.get_variable(args.regressor_file)
     
-    mask_img_path = Path("../../template/all_final_group_mask_6mm.nii.gz")
+    mask_img_path = Path(f"../../template/all_final_group_mask_{args.smoothness}mm.nii.gz")
     mask_img = image.load_img(mask_img_path)
     
     # Call analyze_clusters with the parsed arguments
@@ -359,19 +370,22 @@ def main():
         variable=variable_name, 
         smoothness=args.smoothness, 
         mask_img=mask_img,
-        vox_threhold=args.vox_threhold, 
+        vox_threshold=args.vox_threshold, 
         cluster_threshold_alpha=args.cluster_threshold_alpha
     )
 
-    # Extract cluster masks and update the table
-    extract_cluster_mask(
-        group=group_num, 
-        variable=variable_name, 
-        smoothness=args.smoothness, 
-        table=table,
-        label_maps=label_maps,
-        mask_img=mask_img
-    )
+    # Check if label_maps is not empty before proceeding
+    if label_maps:
+        extract_cluster_mask(
+            group=group_num, 
+            variable=variable_name, 
+            smoothness=args.smoothness, 
+            table=table,
+            label_maps=label_maps,
+            mask_img=mask_img
+        )
+    else:
+        print("No clusters found. Skipping cluster mask extraction.")
 
     # Print the updated table
     print(table)
